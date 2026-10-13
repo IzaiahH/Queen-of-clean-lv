@@ -151,7 +151,7 @@ npm run db:seed:demo
    ```bash
    npm run db:migrate && npm run db:seed
    ```
-   You can also paste `supabase/migrations/*.sql` into the SQL editor in order, then run `npm run db:seed`.
+   **No local tools?** Paste `supabase/setup.sql` (all migrations plus the base seed in one file) into SQL Editor → New query and click **Run**. Regenerate it with `npx tsx scripts/build-setup-sql.ts` after changing migrations or seed data.
 4. **Set the Auth variables.** In Project Settings → API, copy:
    - The URL into `NEXT_PUBLIC_SUPABASE_URL`.
    - The publishable (anon) key into `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
@@ -163,6 +163,8 @@ npm run db:seed:demo
    AUTH_PROVIDER=supabase npm run admin:create -- --email owner@yourdomain.com --name "Owner Name" --role owner
    ```
    This creates the Supabase Auth user with the service-role key and links it to a `profiles` row. You can set `ADMIN_PASSWORD` in the environment to avoid the prompt in automation.
+
+   **No local tools?** Create the user in Authentication → Users → **Add user** (tick "Auto Confirm User"), then run `supabase/link-owner.sql` in the SQL editor with that email and name filled in.
 
 ## Email setup (Resend)
 
