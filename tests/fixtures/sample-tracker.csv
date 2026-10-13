@@ -1,0 +1,6 @@
+Customer,Area,Bedrooms,Bathrooms,Sq Ft,Frequency,Current Price,New Price,Time,Cleaner Pay,Supplies,Profit,Monthly Revenue,Next Cleaning,Email,Phone
+Alex Sample,Summerlin,3,2,1800,Biweekly,$170,$185,3.5,$70,$8,#VALUE!,$370,10/20/2026,alex.sample@example.com,702-555-0101
+Casey Example,Henderson,4,2.5,"2,400",Weekly,$160,$165,3,$65,$7,$93,$715,10/16/2026,,702-555-0102
+Riley Test,Spring Valley,2,1,~1100,every other week,$150,,2,$50,$6,$94,$300,next tue,riley@,555-01
+Priya Shah (sample),Henderson,4,3,2600,Monthly,$210,$210,4,$90,$9,$111,$210,11/2/2026,priya.sample@example.com,702-555-0142
+,Las Vegas,3,2,1500,Monthly,$200,,3,,,,,,,
