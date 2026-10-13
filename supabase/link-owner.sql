@@ -6,4 +6,4 @@ select email, 'Owner Name', 'owner', id, true
   from auth.users
  where lower(email) = lower('owner@example.com')
 on conflict ((lower(email))) do update set role = 'owner', auth_user_id = excluded.auth_user_id, active = true;
--- Should say "INSERT 0 1". "INSERT 0 0" means no Auth user has that email yet.
+-- Check it worked: select email, full_name, role from profiles;  (no row = no Auth user has that email yet)
