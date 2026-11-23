@@ -31,11 +31,11 @@ const STANDARD_EXCLUDES = [
 export const SERVICES = [
   {
     slug: "recurring",
-    name: "Recurring Home Cleaning",
+    name: "Recurring Residential Cleaning",
     kind: "recurring",
     short: "Weekly, every-two-weeks, or monthly visits that keep your home consistently clean.",
     description:
-      "Our core service. Choose weekly, every two weeks, or monthly visits and we keep your home at the same standard every time. Recurring pricing assumes the home is maintained on schedule; a longer gap may need a reset clean first.",
+      "Our core service. Choose weekly, every-two-weeks or monthly visits and we keep your home at the same standard every time, following the same checklist and the notes you've given us about your home.\n\nHow often we visit shapes the price. Weekly homes need the least catch-up work per visit, so they have the lowest per-visit rate; monthly visits include more accumulated dust and buildup, so they cost a little more each time. Recurring rates assume the schedule is kept. After a long gap, a Queen Reset may be recommended first.",
     includes: STANDARD_INCLUDES,
     excludes: STANDARD_EXCLUDES,
     freqs: ["weekly", "biweekly", "monthly"],
@@ -44,10 +44,11 @@ export const SERVICES = [
   },
   {
     slug: "standard",
-    name: "One-Time Standard Cleaning",
+    name: "One-Time Cleaning",
     kind: "standard",
     short: "A single top-to-bottom standard clean, ideal before guests or an event.",
-    description: "A one-time visit covering our full standard checklist. Great for homes that are already in good shape.",
+    description:
+      "A single visit covering our full standard checklist, with no ongoing commitment. A good fit before guests arrive, after a busy stretch, or to try us out.\n\nOne-time cleanings are priced on their own and don't receive recurring-plan discounts. If your home hasn't been professionally cleaned in a while, a Queen Reset is usually the better choice.",
     includes: STANDARD_INCLUDES,
     excludes: STANDARD_EXCLUDES,
     freqs: ["one_time"],
@@ -60,7 +61,7 @@ export const SERVICES = [
     kind: "deep",
     short: "A detailed reset for homes that need extra attention or are starting a recurring plan.",
     description:
-      "Everything in a standard clean plus the detail work: baseboards, door frames, light switches, cabinet fronts, built-up grime in kitchens and bathrooms. Recommended as the first visit before recurring service when a home hasn't been professionally cleaned recently.",
+      "The Queen Reset is our most detailed service: everything in a standard clean, plus the detail work that regular visits don't reach.\n\nIt's the right starting point when a home hasn't been professionally cleaned recently, before beginning a recurring plan, or whenever you want the whole house brought back to a fresh baseline. Because the time needed depends on the home's condition, very heavy buildup is reviewed by our team before we confirm a price.",
     includes: [...STANDARD_INCLUDES, "Baseboards, door frames and light switches", "Cabinet fronts and handles", "Detailed scrubbing of kitchen and bathroom buildup"],
     excludes: STANDARD_EXCLUDES,
     freqs: ["one_time"],
@@ -72,7 +73,8 @@ export const SERVICES = [
     name: "Move-In / Move-Out Cleaning",
     kind: "move",
     short: "An empty-home clean for moving day, inside cabinets and appliances by request.",
-    description: "A thorough clean of an empty or nearly empty home before you move in or after you move out.",
+    description:
+      "A thorough clean of an empty or nearly empty home, timed around your move. Start fresh in a new home, or hand over the keys to your landlord or buyer with the place in good order.\n\nMove cleanings vary a lot from home to home, so our team reviews each request and confirms the price and scope with you before the visit.",
     includes: [...STANDARD_INCLUDES, "Inside empty cabinets and drawers", "Baseboards and door frames"],
     excludes: STANDARD_EXCLUDES,
     freqs: ["one_time"],
@@ -88,6 +90,18 @@ export const SERVICES = [
     includes: [...STANDARD_INCLUDES, "Reset for the next guest"],
     excludes: [...STANDARD_EXCLUDES, "Restocking guest supplies unless arranged"],
     freqs: ["one_time"],
+    review: true,
+    active: false, // potential expansion — enable in Admin → Pricing & Services when ready
+  },
+  {
+    slug: "commercial",
+    name: "Commercial Cleaning",
+    kind: "custom",
+    short: "Offices and small commercial spaces.",
+    description: "Cleaning for offices and small commercial spaces, quoted individually after a walkthrough.",
+    includes: [],
+    excludes: [],
+    freqs: ["one_time", "weekly", "biweekly", "monthly"],
     review: true,
     active: false, // potential expansion — enable in Admin → Pricing & Services when ready
   },

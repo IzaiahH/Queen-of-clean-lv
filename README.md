@@ -18,7 +18,7 @@ The owner's guide is in [OWNER-GUIDE.md](OWNER-GUIDE.md).
 | Layer | Choice |
 |---|---|
 | Framework | Next.js 16 (App Router, Turbopack, server components and server actions), React 19, strict TypeScript |
-| Styling | Tailwind CSS v4. Brand tokens live in `src/app/globals.css` (`@theme`); components use tokens only |
+| Styling | Tailwind CSS v4. Brand tokens live in `src/app/globals.css` (`@theme`); components use tokens only. Fonts (Cormorant Garamond, Manrope) are self-hosted in `src/app/fonts` |
 | Database | Postgres (Supabase in production), accessed **only from the server** with `postgres` (porsager) |
 | Auth | Supabase Auth (production) or built-in local accounts (development), mapped to `profiles` with roles |
 | Email | Resend HTTP API, with every message logged in `communications` |
@@ -246,13 +246,13 @@ npm start & npm run test:e2e   # Playwright on a phone viewport against the runn
 
 ## Defaults chosen (change any of them in Admin)
 
-- **Colors:** the brand palette (obsidian, midnight, antique gold, champagne, ivory, cream, espresso, charcoal) replaces the earlier emerald/green direction.
+- **Colors:** the owner's palette — primary gold `#C49A45`, antique gold `#98702C`, champagne `#E5D2A6`, ivory `#FAF8F3`, white, charcoal `#252525`, warm gray. Small body text uses slightly deeper gold (`#8A6526`) and gray (`#6E6A62`) so it meets WCAG AA contrast on ivory.
 - **Starting prices are a draft for the owner to review:**
   - Weekly $165, every 2 weeks $185, monthly $210.
   - Queen Reset (deep clean) $275.
   - These replace the $125/$180/$200 shown on the reference image.
   - Add-ons and size bands are also starter values. Admin → Pricing & Services shows them all, and nothing is final until the owner publishes.
-- **Logo:** the crown and wordmark are recreated as vector art. The owner can upload a PNG, JPG or WebP logo in Settings → Business.
+- **Logo:** the owner's own artwork is used as supplied: `public/images/queen-of-clean-logo.png` (full wordmark: desktop header, hero, footer, login) and `public/images/queen-crowned-q.png` (crowned Q: mobile header, admin, favicon and phone app icon). Both have transparent backgrounds.
 - **No customers were seeded.** The customer tracker screenshot wasn't provided. Use Admin → Import / Export to bring in a spreadsheet; nothing is imported or scheduled without review.
 - **Online bookings start as "Pending review."** Auto-confirm is off; turn it on in Settings → Booking, with a price cap and a returning-customers-only option.
 - **Booking rules:**
@@ -270,7 +270,7 @@ npm start & npm run test:e2e   # Playwright on a phone viewport against the runn
 - **No SMS.** Settings shows that text messages aren't connected. A customer's contact preference (email, call or text) is shown on their profile so the team can text them by hand.
 - **No photo uploads** on jobs or customers. Job notes and checklists are text only.
 - **The logo upload is stored in the database** as a small data URL (under 280 KB), not in object storage.
-- **No stock photography.** The site uses typography, the crown emblem and illustration; add real photos of your work when you have them.
+- **No stock photography.** Until the owner sets a hero photo (Settings → Business → Homepage hero), the hero presents the full logo. Use real photos of your work.
 - **Manage links rotate.** Each new email to a customer issues a fresh manage link and older links stop working. This is intentional, so a forwarded old email can't be used to change a booking.
 - **Spreadsheet import** handles CSV and the first sheet of an XLSX file, up to 2,000 rows.
 - **Reminders run in a daily batch** on Vercel Hobby (see Deploying).

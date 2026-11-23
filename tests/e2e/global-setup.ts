@@ -14,7 +14,7 @@ async function hash(pw: string) {
 /** Ensures a synthetic owner and a cleaner login (with working hours) exist. Local auth + local/staging DB only. */
 export default async function setup() {
   loadEnv();
-  const url = process.env.E2E_DATABASE_URL ?? process.env.DATABASE_URL;
+  const url = process.env.E2E_DATABASE_URL || process.env.DATABASE_URL;
   if (!url) throw new Error("Set DATABASE_URL (or E2E_DATABASE_URL) to the database the app under test uses.");
   if (!/localhost|127\.0\.0\.1/.test(url) && process.env.E2E_ALLOW_REMOTE_DB !== "1") throw new Error("Refusing to add test accounts to a non-local database without E2E_ALLOW_REMOTE_DB=1.");
   const sql = postgres(url, { prepare: false, max: 1, onnotice: () => {} });

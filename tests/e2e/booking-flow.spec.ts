@@ -15,7 +15,7 @@ test("public booking on mobile → confirm → assign → cleaner sees it → co
 
   // Customer side
   await page.goto("/quote");
-  await page.getByText("Recurring Home Cleaning").click();
+  await page.locator("#main").getByText("Recurring Residential Cleaning").click();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByLabel("Approximate square footage").fill("1600");
   await page.getByText("Average — due for a good clean").click();
@@ -75,7 +75,7 @@ test("public booking on mobile → confirm → assign → cleaner sees it → co
 
   // The visit happens: move it into the past (as time passing would), then record completion.
   loadEnv();
-  const sql = postgres(process.env.E2E_DATABASE_URL ?? process.env.DATABASE_URL!, { prepare: false, max: 1 });
+  const sql = postgres(process.env.E2E_DATABASE_URL || process.env.DATABASE_URL!, { prepare: false, max: 1 });
   try {
     const id = apptUrl.split("/").pop()!;
     await sql`update appointments set starts_at = now() - interval '4 hours', ends_at = now() - interval '1 hour' where id = ${id}`;

@@ -25,7 +25,7 @@ export async function sendTestEmailAction(template: string) {
   return guard("settings.edit", async (user) => {
     if (!emailConfigured()) return { ok: false, error: "Email isn't set up yet: add RESEND_API_KEY and EMAIL_FROM on the server." };
     const r = await sendTemplatedEmail(z.string().max(60).parse(template), user.email, {
-      first_name: user.full_name.split(" ")[0], reference: "TEST-123", service: "Recurring Home Cleaning", date_time: "Mon, Jan 5 at 9:00 AM", date: "Mon, Jan 5",
+      first_name: user.full_name.split(" ")[0], reference: "TEST-123", service: "Recurring Residential Cleaning", date_time: "Mon, Jan 5 at 9:00 AM", date: "Mon, Jan 5",
       estimate: "$185.00", price: "$185.00", manage_url: "(link appears here)", quote_url: "(link appears here)", expires: "Feb 4", message: "", status: "confirmed",
       customer_name: "Sample Customer", review_reasons: "none", admin_url: "(link)", cancellation_policy: "(policy)", response_time: "",
     }, {}, { audience: "admin" });

@@ -1,66 +1,66 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { Check, X } from "lucide-react";
-import { listAddons, listServices } from "@/lib/server/catalog";
+import { ArrowRight } from "lucide-react";
+import { SectionHeading } from "@/components/public/SectionHeading";
+import { formatCents } from "@/lib/money";
+import { lowestStartingPrice } from "@/lib/pricing/display";
+import { getPublishedPricing, listAddons, listServices } from "@/lib/server/catalog";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Services" };
+export const metadata: Metadata = {
+  title: "House Cleaning Services in Las Vegas",
+  description: "Recurring house cleaning, one-time cleaning, Queen Reset deep cleaning and move-in/move-out cleaning across Las Vegas, Henderson, Summerlin and North Las Vegas.",
+  alternates: { canonical: "/services" },
+};
 
 export default async function ServicesPage() {
-  const [services, addons] = await Promise.all([listServices(undefined, true), listAddons(undefined, true)]);
+  const [services, addons, pricing] = await Promise.all([listServices(undefined, true), listAddons(undefined, true), getPublishedPricing()]);
+  const pricedAddons = addons.filter((a) => pricing.rules.addons[a.slug]);
   return (
     <div className="bg-ivory">
-      <section className="on-dark bg-obsidian py-14 text-center text-ivory sm:py-20">
-        <p className="eyebrow">Services</p>
-        <h1 className="mx-auto mt-3 max-w-2xl px-4 text-4xl font-semibold sm:text-6xl">What every clean includes</h1>
-        <p className="mx-auto mt-4 max-w-xl px-4 text-ivory/70">Clear scopes, so you know exactly what you&apos;re booking. Extras are always optional and priced separately.</p>
+      <section className="border-b border-line bg-paper px-4 py-14 sm:py-20">
+        <SectionHeading as="h1" eyebrow="Our services" title="Home cleaning, tailored to your home" intro="Every service starts with a free online estimate. Extras are always optional and priced separately, and nothing is booked until our team confirms." />
       </section>
-      <div className="mx-auto max-w-5xl space-y-8 px-4 py-14 sm:px-6">
-        {services.map((s) => (
-          <article id={s.slug} key={s.slug} className="card scroll-mt-24 p-6 sm:p-8">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="text-3xl font-semibold">{s.name}</h2>
-                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">{s.description}</p>
+      <div className="mx-auto max-w-5xl space-y-5 px-4 py-14 sm:px-6 sm:py-20">
+        {services.map((s) => {
+          const from = lowestStartingPrice(pricing.rules, s.slug);
+          return (
+            <article key={s.slug} id={s.slug} className="card scroll-mt-28 p-6 sm:p-8">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <h2 className="text-3xl font-semibold">{s.name}</h2>
+                  <p className="mt-2 max-w-2xl leading-relaxed text-muted">{s.short_description}</p>
+                  <p className="mt-3 text-sm font-semibold text-gold-ink">{from !== null ? `Starting at ${formatCents(from)}` : "Custom quote"}</p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-3">
+                  <Link href={`/services/${s.slug}`} className="btn btn-outline btn-sm">Details <ArrowRight className="size-4" aria-hidden /></Link>
+                  <Link href={`/quote?service=${s.slug}`} className="btn btn-primary btn-sm">Get a quote</Link>
+                </div>
               </div>
-              <Link href={`/quote?service=${s.slug}`} className="btn btn-primary shrink-0">Get a quote</Link>
-            </div>
-            {(s.includes.length > 0 || s.excludes.length > 0) && (
-              <div className="mt-6 grid gap-6 border-t border-line pt-6 md:grid-cols-2">
-                {s.includes.length > 0 && (
-                  <div>
-                    <p className="eyebrow">Included</p>
-                    <ul className="mt-3 space-y-2 text-sm">
-                      {s.includes.map((i) => (
-                        <li key={i} className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />{i}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {s.excludes.length > 0 && (
-                  <div>
-                    <p className="eyebrow">Not included</p>
-                    <ul className="mt-3 space-y-2 text-sm text-muted">
-                      {s.excludes.map((i) => (
-                        <li key={i} className="flex gap-2"><X className="mt-0.5 size-4 shrink-0" aria-hidden />{i}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-          </article>
-        ))}
-        {addons.length > 0 && (
-          <section className="card p-6 sm:p-8">
-            <h2 className="text-3xl font-semibold">Optional extras</h2>
-            <p className="mt-2 text-sm text-muted">Add these in the quote form. Prices are shown in your estimate.</p>
-            <ul className="mt-6 grid gap-4 sm:grid-cols-2">
-              {addons.map((a) => (
-                <li key={a.slug} className="border-l-2 border-gold pl-3">
-                  <p className="font-semibold">{a.name}</p>
-                  <p className="text-sm text-muted">{a.description}</p>
-                </li>
-              ))}
+            </article>
+          );
+        })}
+        {pricedAddons.length > 0 && (
+          <section className="card p-6 sm:p-8" aria-labelledby="extras">
+            <h2 id="extras" className="text-3xl font-semibold">Optional extras</h2>
+            <p className="mt-2 text-sm text-muted">Add any of these in the quote form; their prices appear line by line in your estimate.</p>
+            <ul className="mt-6 grid gap-x-8 gap-y-4 sm:grid-cols-2">
+              {pricedAddons.map((a) => {
+                const r = pricing.rules.addons[a.slug];
+                return (
+                  <li key={a.slug} className="border-l-2 border-gold pl-4">
+                    <p className="flex flex-wrap items-baseline justify-between gap-x-3 font-semibold">
+                      {a.name}
+                      <span className="text-sm font-semibold text-gold-ink">
+                        {r.starting_at ? "from " : ""}
+                        {formatCents(r.price_cents)}
+                        {r.unit === "each" && r.unit_label ? ` per ${r.unit_label}` : ""}
+                      </span>
+                    </p>
+                    <p className="text-sm text-muted">{a.description}</p>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}

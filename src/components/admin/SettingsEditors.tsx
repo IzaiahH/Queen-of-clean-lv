@@ -46,6 +46,14 @@ export function BusinessSettings({ initial }: { initial: Settings["business"] })
         <Text label="Hours (as shown on the site)" value={v.hours_text} onChange={(x) => setV({ ...v, hours_text: x })} />
         <Text label="Response time message" value={v.response_time_text} onChange={(x) => setV({ ...v, response_time_text: x })} />
       </div>
+      <fieldset className="space-y-3 rounded-[var(--radius-card)] border border-line p-4"><legend className="field-label px-1">Homepage hero</legend>
+        <Text label="Headline" value={v.hero_headline} max={120} onChange={(x) => setV({ ...v, hero_headline: x })} />
+        <Area label="Supporting text" value={v.hero_subtext} max={400} rows={3} onChange={(x) => setV({ ...v, hero_subtext: x })} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Text label="Hero photo address (optional)" value={v.hero_image_url} max={500} onChange={(x) => setV({ ...v, hero_image_url: x.trim() })} hint="An https:// image link, or a path like /images/hero.jpg. Leave blank to show your logo instead. Use your own photos, not stock pictures presented as your work." />
+          <Text label="Photo description (for screen readers and search)" value={v.hero_image_alt} max={200} onChange={(x) => setV({ ...v, hero_image_alt: x })} hint="e.g. Bright, freshly cleaned kitchen in a Summerlin home" />
+        </div>
+      </fieldset>
       <Area label="About the business" value={v.description} max={1200} onChange={(x) => setV({ ...v, description: x })} hint="Only include facts you can stand behind. Don't list licenses, insurance or awards unless you have them." />
       <fieldset className="space-y-2"><legend className="field-label">Why choose us (homepage)</legend>
         {v.strengths.map((s, i) => (
@@ -56,6 +64,27 @@ export function BusinessSettings({ initial }: { initial: Settings["business"] })
           </div>
         ))}
         {v.strengths.length < 8 && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setV({ ...v, strengths: [...v.strengths, { title: "", body: "" }] })}><Plus className="size-4" aria-hidden />Add</button>}
+      </fieldset>
+      <fieldset className="space-y-2"><legend className="field-label">What makes us different (homepage)</legend>
+        {v.differentiators.map((s, i) => (
+          <div key={i} className="grid gap-2 rounded-[var(--radius-control)] border border-line p-3 sm:grid-cols-[1fr_2fr_auto]">
+            <input aria-label="Title" className="input" maxLength={60} value={s.title} onChange={(e) => setV({ ...v, differentiators: v.differentiators.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)) })} />
+            <input aria-label="Text" className="input" maxLength={300} value={s.body} onChange={(e) => setV({ ...v, differentiators: v.differentiators.map((x, j) => (j === i ? { ...x, body: e.target.value } : x)) })} />
+            <button type="button" className="btn btn-ghost size-11 p-0" aria-label="Remove" onClick={() => setV({ ...v, differentiators: v.differentiators.filter((_, j) => j !== i) })}><Trash2 className="size-4" aria-hidden /></button>
+          </div>
+        ))}
+        {v.differentiators.length < 8 && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setV({ ...v, differentiators: [...v.differentiators, { title: "", body: "" }] })}><Plus className="size-4" aria-hidden />Add</button>}
+      </fieldset>
+      <Area label="Communities listed on the website (one per line)" rows={5} max={1600} value={v.communities.join("\n")} onChange={(x) => setV({ ...v, communities: x.split("\n").map((c) => c.slice(0, 40)) })} hint="Display only. Which addresses can book is set by ZIP code under Pricing & Services → Service areas." />
+      <fieldset className="space-y-2"><legend className="field-label">Social media links</legend>
+        {v.social_links.map((l, i) => (
+          <div key={i} className="grid gap-2 rounded-[var(--radius-control)] border border-line p-3 sm:grid-cols-[1fr_2fr_auto]">
+            <input aria-label="Label" placeholder="Instagram" className="input" maxLength={30} value={l.label} onChange={(e) => setV({ ...v, social_links: v.social_links.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} />
+            <input aria-label="Link" placeholder="https://" type="url" className="input" maxLength={300} value={l.url} onChange={(e) => setV({ ...v, social_links: v.social_links.map((x, j) => (j === i ? { ...x, url: e.target.value.trim() } : x)) })} />
+            <button type="button" className="btn btn-ghost size-11 p-0" aria-label="Remove" onClick={() => setV({ ...v, social_links: v.social_links.filter((_, j) => j !== i) })}><Trash2 className="size-4" aria-hidden /></button>
+          </div>
+        ))}
+        {v.social_links.length < 8 && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setV({ ...v, social_links: [...v.social_links, { label: "", url: "" }] })}><Plus className="size-4" aria-hidden />Add link</button>}
       </fieldset>
       <fieldset className="space-y-2"><legend className="field-label">Frequently asked questions</legend>
         {v.faqs.map((f, i) => (
@@ -70,7 +99,7 @@ export function BusinessSettings({ initial }: { initial: Settings["business"] })
       <fieldset><legend className="field-label">Logo</legend>
         <div className="flex flex-wrap items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          {v.logo_data_url ? <img src={v.logo_data_url} alt="Uploaded logo" className="h-14 rounded bg-obsidian p-2" /> : <span className="text-sm text-muted">Using the built-in crown wordmark.</span>}
+          {v.logo_data_url ? <img src={v.logo_data_url} alt="Uploaded logo" className="h-14 rounded border border-line bg-paper p-2" /> : <span className="text-sm text-muted">Using your Queen of Clean LV logo files.</span>}
           <label className="btn btn-outline btn-sm cursor-pointer">Upload PNG/JPG/WebP<input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(e) => {
             const f = e.target.files?.[0];
             if (!f) return;
@@ -83,9 +112,16 @@ export function BusinessSettings({ initial }: { initial: Settings["business"] })
           {v.logo_data_url && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setV({ ...v, logo_data_url: null })}>Use built-in logo</button>}
         </div>
         {logoErr && <p className="field-error">{logoErr}</p>}
-        <p className="field-hint">Shows on a dark header, so a light or gold logo on a transparent background works best.</p>
+        <p className="field-hint">Optional. Replaces the full logo in the desktop header and footer. A transparent PNG works best.</p>
       </fieldset>
-      <SaveBar pending={pending} onSave={() => save({ ...v, strengths: v.strengths.filter((s) => s.title.trim()), faqs: v.faqs.filter((f) => f.q.trim() && f.a.trim()) })} />
+      <SaveBar pending={pending} onSave={() => save({
+        ...v,
+        strengths: v.strengths.filter((s) => s.title.trim()),
+        differentiators: v.differentiators.filter((s) => s.title.trim()),
+        communities: v.communities.map((c) => c.trim()).filter(Boolean),
+        social_links: v.social_links.filter((l) => l.label.trim() && l.url.trim()),
+        faqs: v.faqs.filter((f) => f.q.trim() && f.a.trim()),
+      })} />
     </div>
   );
 }

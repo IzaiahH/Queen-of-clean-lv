@@ -117,9 +117,10 @@ const initial = (service: string | null): State => ({
 
 type Result = { kind: "appointment" | "quote"; reference: string; status: string; manage_url: string | null; quote_url: string | null; email: string | null };
 
-export function QuoteWizard({ catalog, initialService }: { catalog: WizardCatalog; initialService: string | null }) {
+export function QuoteWizard({ catalog, initialService, initialFrequency = null }: { catalog: WizardCatalog; initialService: string | null; initialFrequency?: string | null }) {
   const validInitial = catalog.services.some((s) => s.slug === initialService) ? initialService : null;
-  const [s, setS] = useState<State>(() => initial(validInitial));
+  const validFrequency = catalog.services.find((x) => x.slug === validInitial)?.frequencies.find((f) => f === initialFrequency) ?? "";
+  const [s, setS] = useState<State>(() => ({ ...initial(validInitial), frequency: validFrequency }));
   const [step, setStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [estimate, setEstimate] = useState<Estimate | null>(null);
@@ -363,7 +364,7 @@ export function QuoteWizard({ catalog, initialService }: { catalog: WizardCatalo
   return (
     <div className="mx-auto max-w-3xl px-4 pb-32 sm:px-6 sm:pb-16">
       {/* Progress */}
-      <nav aria-label="Quote progress" className="-mt-6 rounded-[var(--radius-card)] border border-line bg-[#fffdf8] p-4 shadow-[var(--shadow-soft)]">
+      <nav aria-label="Quote progress" className="-mt-6 rounded-[var(--radius-card)] border border-line bg-paper p-4 shadow-[var(--shadow-soft)]">
         <p className="text-sm font-semibold">
           Step {stepIndexForBar + 1} of {visibleSteps.length} <span className="text-muted">· {STEPS[shownStep]}</span>
         </p>
@@ -793,7 +794,7 @@ function EstimateCard({ estimate, frequency, serviceName }: { estimate: Estimate
     );
   }
   return (
-    <div className="frame overflow-hidden rounded-sm bg-[#fffdf8]">
+    <div className="frame overflow-hidden rounded-sm bg-paper">
       <div className="on-dark bg-obsidian px-6 py-6 text-ivory">
         <p className="eyebrow">{estimate.requires_review ? "Estimate · subject to review" : "Estimate"}</p>
         <p className="mt-1 text-sm text-ivory/70">{serviceName} · {FREQUENCY_LABELS[frequency]}</p>
@@ -868,7 +869,7 @@ function SlotPicker(props: {
               aria-checked={sel}
               onClick={() => props.onDay(d.date)}
               disabled={d.slots.length === 0}
-              className={`flex min-w-[4.5rem] snap-start flex-col items-center rounded-[var(--radius-control)] border px-2 py-2 text-sm transition ${sel ? "border-gold bg-obsidian text-champagne" : "border-line bg-[#fffdf8] hover:border-champagne"} disabled:cursor-not-allowed disabled:opacity-40`}
+              className={`flex min-w-[4.5rem] snap-start flex-col items-center rounded-[var(--radius-control)] border px-2 py-2 text-sm transition ${sel ? "border-gold bg-obsidian text-champagne" : "border-line bg-paper hover:border-champagne"} disabled:cursor-not-allowed disabled:opacity-40`}
             >
               <span className="text-xs font-bold uppercase tracking-wide">{dow}</span>
               <span className="font-semibold">{rest.join(", ")}</span>
@@ -890,7 +891,7 @@ function SlotPicker(props: {
                 {g.slots.map((sl) => {
                   const sel = props.slot?.start === sl.start;
                   return (
-                    <button key={sl.start} type="button" role="radio" aria-checked={sel} onClick={() => props.onSlot(sl)} className={`min-h-11 rounded-[var(--radius-control)] border text-sm font-semibold transition ${sel ? "border-gold bg-gold text-obsidian" : "border-line bg-[#fffdf8] hover:border-gold"}`}>
+                    <button key={sl.start} type="button" role="radio" aria-checked={sel} onClick={() => props.onSlot(sl)} className={`min-h-11 rounded-[var(--radius-control)] border text-sm font-semibold transition ${sel ? "border-gold bg-gold text-obsidian" : "border-line bg-paper hover:border-gold"}`}>
                       {sl.label}
                     </button>
                   );
@@ -987,7 +988,7 @@ function Confirmation({ result, catalog }: { result: Result; catalog: WizardCata
   const isAppt = result.kind === "appointment";
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6" role="status">
-      <div className="frame rounded-sm bg-[#fffdf8] p-8 text-center">
+      <div className="frame rounded-sm bg-paper p-8 text-center">
         <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-obsidian">
           <Check className="size-7 text-champagne" aria-hidden />
         </div>
