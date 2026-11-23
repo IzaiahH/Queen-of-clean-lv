@@ -15,7 +15,7 @@ import { formatDate, formatDateTime } from "@/lib/time";
 
 export const metadata = { title: "Customers" };
 const PAGE = 50;
-const STATUSES = [["", "Current"], ["active", "Active"], ["lead", "Leads"], ["inactive", "Inactive"], ["archived", "Archived"], ["all", "All"]] as const;
+const STATUSES = [["", "Current"], ["active", "Active"], ["unverified", "To verify"], ["lead", "Leads"], ["inactive", "Inactive"], ["archived", "Archived"], ["all", "All"]] as const;
 
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requirePage("customers.view");
@@ -87,14 +87,17 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
         <>
           <div className="card hidden overflow-x-auto md:block">
             <table className="table">
-              <thead><tr><th>Name</th><th>Contact</th><th>Area</th><th>Recurring</th><th>Last visit</th><th>Next visit</th>{showMoney && <th className="text-right">Lifetime</th>}<th>Status</th></tr></thead>
+              <thead><tr><th>Name</th><th>Contact</th><th>Area</th><th>Frequency & rate</th><th>Last visit</th><th>Next visit</th>{showMoney && <th className="text-right">Lifetime</th>}<th>Status</th></tr></thead>
               <tbody>
                 {list.map((c) => (
                   <tr key={c.id}>
                     <td><Link href={`/admin/customers/${c.id}`} className="font-semibold hover:text-gold-ink">{c.full_name}</Link></td>
                     <td className="text-xs">{c.email ?? "—"}<span className="block text-muted">{c.phone ?? ""}</span></td>
                     <td className="text-sm">{c.area ?? c.city ?? "—"}</td>
-                    <td className="text-sm">{c.recurring ? frequencyLabel(c.recurring as "weekly") : "—"}</td>
+                    <td className="text-sm">
+                      {c.recurring ? frequencyLabel(c.recurring as "weekly") : c.preferred_frequency && c.preferred_frequency !== "one_time" ? frequencyLabel(c.preferred_frequency as "weekly") : "—"}
+                      {c.rate_cents !== null && <span className="block text-xs text-muted">{formatCents(c.rate_cents)}/visit{c.rate_kind === "historical" ? " · historical" : " · custom"}</span>}
+                    </td>
                     <td className="text-sm">{c.last_visit ? formatDate(c.last_visit, tz) : "—"}</td>
                     <td className="text-sm">{c.next_visit ? formatDate(c.next_visit, tz) : "—"}</td>
                     {showMoney && <td className="text-right tabular-nums">{formatCents(c.lifetime_cents)}</td>}
@@ -109,7 +112,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
               <li key={c.id}><Link href={`/admin/customers/${c.id}`} className="card block p-4">
                 <span className="flex items-start justify-between gap-2"><span className="font-semibold">{c.full_name}</span><StatusBadge status={c.status} /></span>
                 <span className="block text-xs text-muted">{[c.phone, c.email].filter(Boolean).join(" · ") || "No contact details"}</span>
-                <span className="mt-1 block text-xs">{c.next_visit ? `Next: ${formatDate(c.next_visit, tz)}` : c.last_visit ? `Last: ${formatDate(c.last_visit, tz)}` : "No visits yet"}{c.recurring ? " · Recurring" : ""}</span>
+                <span className="mt-1 block text-xs">{c.next_visit ? `Next: ${formatDate(c.next_visit, tz)}` : c.last_visit ? `Last: ${formatDate(c.last_visit, tz)}` : "No visits yet"}{c.recurring ? " · Recurring" : ""}{c.rate_cents !== null ? ` · ${formatCents(c.rate_cents)}/visit` : ""}</span>
               </Link></li>
             ))}
           </ul>

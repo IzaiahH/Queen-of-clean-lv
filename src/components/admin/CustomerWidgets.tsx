@@ -15,7 +15,7 @@ import { parseMoneyToCents } from "@/lib/money";
 import type { CleanerOption } from "./AppointmentPanel";
 import { NewAppointmentDialog, type ServiceOption } from "./NewAppointmentDialog";
 
-type Hit = { id: string; full_name: string; email: string | null; phone: string | null; properties: { id: string; label: string; address: string | null; has_address: boolean }[]; last_price: number | null; last_minutes: number | null };
+type Hit = { id: string; full_name: string; email: string | null; phone: string | null; properties: { id: string; label: string; address: string | null; has_address: boolean }[]; last_price: number | null; last_minutes: number | null; rates?: { service_slug: string; frequency: string; price_cents: number; kind: "historical" | "custom" }[] };
 
 export function BookFromProfile({ customer, tz, services, cleaners }: { customer: Hit; tz: string; services: ServiceOption[]; cleaners: CleanerOption[] }) {
   const [open, setOpen] = useState(false);

@@ -8,7 +8,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { useAction } from "@/components/ui/useAction";
 
 export type CustomerFormValue = {
-  full_name: string; email: string; phone: string; preferred_contact: "email" | "phone" | "text"; status: "lead" | "active" | "inactive" | "archived";
+  full_name: string; email: string; phone: string; preferred_contact: "email" | "phone" | "text"; status: "lead" | "active" | "inactive" | "archived" | "unverified";
   preferences: string; private_notes: string; marketing_consent: boolean;
 };
 export type PropertyFormValue = {
@@ -41,7 +41,7 @@ function CustomerFields({ v, set }: { v: CustomerFormValue; set: (v: CustomerFor
         <select className="input" value={v.preferred_contact} onChange={(e) => set({ ...v, preferred_contact: e.target.value as "email" })}><option value="email">Email</option><option value="phone">Phone call</option><option value="text">Text</option></select>
       </label>
       <label><span className="field-label">Status</span>
-        <select className="input" value={v.status} onChange={(e) => set({ ...v, status: e.target.value as "active" })}><option value="lead">Lead</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="archived">Archived</option></select>
+        <select className="input" value={v.status} onChange={(e) => set({ ...v, status: e.target.value as "active" })}><option value="lead">Lead</option><option value="unverified">Existing client — verify current status</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="archived">Archived</option></select>
       </label>
       <label className="sm:col-span-2"><span className="field-label">Preferences <span className="font-normal text-muted">(products, rooms to skip, how they like things)</span></span><textarea className="input" rows={2} maxLength={3000} value={v.preferences} onChange={(e) => set({ ...v, preferences: e.target.value })} /></label>
       <label className="sm:col-span-2"><span className="field-label">Private notes <span className="font-normal text-muted">(staff only)</span></span><textarea className="input" rows={2} maxLength={5000} value={v.private_notes} onChange={(e) => set({ ...v, private_notes: e.target.value })} /></label>

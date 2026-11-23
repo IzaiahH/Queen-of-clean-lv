@@ -14,6 +14,7 @@ const STYLES: Record<string, { label: string; cls: string }> = {
   // customers / series
   lead: { label: "Lead", cls: "bg-status-pending-bg text-status-pending border-status-pending/40" },
   active: { label: "Active", cls: "bg-status-completed-bg text-status-completed border-status-completed/40" },
+  unverified: { label: "Existing client — verify current status", cls: "bg-status-pending-bg text-status-pending border-status-pending/40" },
   inactive: { label: "Inactive", cls: "bg-status-cancelled-bg text-status-cancelled border-status-cancelled/40" },
   archived: { label: "Archived", cls: "bg-status-cancelled-bg text-status-cancelled border-status-cancelled/40" },
   paused: { label: "Paused", cls: "bg-status-pending-bg text-status-pending border-status-pending/40" },

@@ -19,6 +19,8 @@ export const CAPABILITIES = {
   "customers.view": ["owner", "admin", "office"],
   "customers.edit": ["owner", "admin", "office"],
   "customers.merge": ["owner", "admin"],
+  /** Customer-specific (historical/custom) rates. Office staff can see and use them when booking, not change them. */
+  "customers.rates": ["owner", "admin"],
   "quotes.view": ["owner", "admin", "office"],
   "quotes.edit": ["owner", "admin", "office"],
   "quotes.override": ["owner", "admin"],

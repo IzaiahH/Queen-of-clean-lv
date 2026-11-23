@@ -591,13 +591,119 @@ create policy appointments_cleaner_read on appointments for select to authentica
 create policy profiles_self_read on profiles for select to authenticated using (auth_user_id = auth.uid());
 insert into schema_migrations (name) values ('20261012000000_init.sql');
 
+-- ── migration 20261123000000_intake_and_images.sql ──
+-- Phase 2: richer property intake and private image storage.
+-- Additive only: no existing column or row is changed.
+
+alter table properties
+  add column if not exists flooring text[] not null default '{}',
+  add column if not exists parking_instructions text not null default '';   -- sensitive: staff-only, like access_instructions
+
+-- Images uploaded through the site.
+--   property_photo: sent by a customer with a quote/booking request. Private: staff only, never public.
+--   site_image:     uploaded by an owner/admin for the website (e.g. the homepage hero). Public.
+-- Every upload is decoded and re-encoded on the server (strips EXIF, including GPS location) before it is stored.
+create table if not exists uploaded_images (
+  id uuid primary key default gen_random_uuid(),
+  purpose text not null check (purpose in ('property_photo','site_image')),
+  content_type text not null check (content_type in ('image/jpeg','image/webp')),
+  bytes bytea not null,
+  size_bytes integer not null check (size_bytes > 0 and size_bytes <= 3000000),
+  width integer not null check (width between 1 and 4000),
+  height integer not null check (height between 1 and 4000),
+  -- Customer uploads: only the browser that uploaded a photo holds the key needed to attach or remove it.
+  upload_key_hash text,
+  quote_id uuid references quotes(id) on delete cascade,
+  appointment_id uuid references appointments(id) on delete set null,
+  customer_id uuid references customers(id) on delete cascade,
+  uploaded_by uuid references profiles(id) on delete set null,
+  attached_at timestamptz,
+  created_at timestamptz not null default now(),
+  check (purpose = 'site_image' or upload_key_hash is not null)
+);
+create index if not exists uploaded_images_quote_idx on uploaded_images(quote_id) where quote_id is not null;
+create index if not exists uploaded_images_appointment_idx on uploaded_images(appointment_id) where appointment_id is not null;
+create index if not exists uploaded_images_customer_idx on uploaded_images(customer_id) where customer_id is not null;
+create index if not exists uploaded_images_unattached_idx on uploaded_images(created_at) where purpose = 'property_photo' and attached_at is null;
+
+alter table uploaded_images enable row level security;
+revoke all on uploaded_images from anon;
+create policy uploaded_images_admin_all on uploaded_images for all to authenticated
+  using (public.app_role() in ('owner','admin')) with check (public.app_role() in ('owner','admin'));
+create policy uploaded_images_office_all on uploaded_images for all to authenticated
+  using (public.app_role() = 'office') with check (public.app_role() = 'office');
+insert into schema_migrations (name) values ('20261123000000_intake_and_images.sql');
+
+-- ── migration 20261124000000_customer_rates.sql ──
+-- Phase 3: existing-customer import and customer-specific (historical) pricing.
+-- Additive: one status value is added to the allowed list, nothing existing is changed.
+
+-- "Existing client — verify current status": imported records stay out of active-customer
+-- counts until someone confirms they're still a client.
+alter table customers drop constraint if exists customers_status_check;
+alter table customers add constraint customers_status_check
+  check (status in ('lead','active','inactive','archived','unverified'));
+
+alter table customers
+  -- Stable key from the source records. Makes re-running an import safe (one customer per key, ever).
+  add column if not exists import_ref text,
+  add column if not exists preferred_frequency text
+    check (preferred_frequency in ('weekly','biweekly','monthly','quarterly','one_time'));
+create unique index if not exists customers_import_ref_key on customers(import_ref) where import_ref is not null;
+
+-- Rates agreed with one specific customer. Kept apart from pricing_versions on purpose:
+-- the public pricing engine never reads this table, and these rates are never recalculated.
+create table if not exists customer_rates (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid not null references customers(id) on delete cascade,
+  property_id uuid references properties(id) on delete set null,
+  service_slug text not null default 'recurring',
+  frequency text not null check (frequency in ('weekly','biweekly','monthly','quarterly','one_time')),
+  price_cents integer not null check (price_cents > 0 and price_cents <= 1000000),
+  basis text not null default 'per_visit' check (basis in ('per_visit')),
+  kind text not null check (kind in ('historical','custom')),
+  status text not null default 'active' check (status in ('active','retired')),
+  source text not null check (source in ('import','admin')),
+  import_ref text,
+  notes text not null default '',
+  created_by uuid references profiles(id) on delete set null,
+  retired_at timestamptz,
+  retired_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check ((status = 'retired') = (retired_at is not null))
+);
+-- One active rate per customer, service and frequency. Changing a rate retires the old row (history is kept).
+create unique index if not exists customer_rates_one_active on customer_rates(customer_id, service_slug, frequency) where status = 'active';
+create unique index if not exists customer_rates_import_ref_key on customer_rates(import_ref) where import_ref is not null;
+create index if not exists customer_rates_customer_idx on customer_rates(customer_id);
+create trigger customer_rates_touch before update on customer_rates for each row execute function touch_updated_at();
+
+alter table customer_rates enable row level security;
+revoke all on customer_rates from anon;
+create policy customer_rates_admin_all on customer_rates for all to authenticated
+  using (public.app_role() in ('owner','admin')) with check (public.app_role() in ('owner','admin'));
+-- Office staff book visits, so they can read rates but not change them.
+create policy customer_rates_office_read on customer_rates for select to authenticated
+  using (public.app_role() = 'office');
+insert into schema_migrations (name) values ('20261124000000_customer_rates.sql');
+
 -- ── base catalog, service areas and first prices ──
-insert into services (slug, name, short_description, description, includes, excludes, kind, allowed_frequencies, requires_review, active, sort) values ('recurring', 'Recurring Home Cleaning', 'Weekly, every-two-weeks, or monthly visits that keep your home consistently clean.', 'Our core service. Choose weekly, every two weeks, or monthly visits and we keep your home at the same standard every time. Recurring pricing assumes the home is maintained on schedule; a longer gap may need a reset clean first.', array['Dust accessible surfaces, furniture and décor', 'Wipe kitchen countertops, backsplash and appliance exteriors', 'Clean sinks and faucets', 'Clean and sanitize bathrooms: toilets, tubs, showers, mirrors', 'Sweep, vacuum and mop floors', 'Empty trash and replace liners', 'General tidying and making beds']::text[], array['Moving heavy furniture', 'Exterior windows', 'Carpet or upholstery shampooing', 'Mold remediation', 'Post-construction cleanup', 'Biohazard or hoarding-level cleanup', 'Large-scale organization (available as an add-on by the hour)']::text[], 'recurring', array['weekly', 'biweekly', 'monthly']::text[], false, true, 0) on conflict (slug) do nothing;
-insert into services (slug, name, short_description, description, includes, excludes, kind, allowed_frequencies, requires_review, active, sort) values ('standard', 'One-Time Standard Cleaning', 'A single top-to-bottom standard clean, ideal before guests or an event.', 'A one-time visit covering our full standard checklist. Great for homes that are already in good shape.', array['Dust accessible surfaces, furniture and décor', 'Wipe kitchen countertops, backsplash and appliance exteriors', 'Clean sinks and faucets', 'Clean and sanitize bathrooms: toilets, tubs, showers, mirrors', 'Sweep, vacuum and mop floors', 'Empty trash and replace liners', 'General tidying and making beds']::text[], array['Moving heavy furniture', 'Exterior windows', 'Carpet or upholstery shampooing', 'Mold remediation', 'Post-construction cleanup', 'Biohazard or hoarding-level cleanup', 'Large-scale organization (available as an add-on by the hour)']::text[], 'standard', array['one_time']::text[], false, true, 1) on conflict (slug) do nothing;
-insert into services (slug, name, short_description, description, includes, excludes, kind, allowed_frequencies, requires_review, active, sort) values ('deep', 'Deep Cleaning — Queen Reset', 'A detailed reset for homes that need extra attention or are starting a recurring plan.', 'Everything in a standard clean plus the detail work: baseboards, door frames, light switches, cabinet fronts, built-up grime in kitchens and bathrooms. Recommended as the first visit before recurring service when a home hasn''t been professionally cleaned recently.', array['Dust accessible surfaces, furniture and décor', 'Wipe kitchen countertops, backsplash and appliance exteriors', 'Clean sinks and faucets', 'Clean and sanitize bathrooms: toilets, tubs, showers, mirrors', 'Sweep, vacuum and mop floors', 'Empty trash and replace liners', 'General tidying and making beds', 'Baseboards, door frames and light switches', 'Cabinet fronts and handles', 'Detailed scrubbing of kitchen and bathroom buildup']::text[], array['Moving heavy furniture', 'Exterior windows', 'Carpet or upholstery shampooing', 'Mold remediation', 'Post-construction cleanup', 'Biohazard or hoarding-level cleanup', 'Large-scale organization (available as an add-on by the hour)']::text[], 'deep', array['one_time']::text[], false, true, 2) on conflict (slug) do nothing;
-insert into services (slug, name, short_description, description, includes, excludes, kind, allowed_frequencies, requires_review, active, sort) values ('move', 'Move-In / Move-Out Cleaning', 'An empty-home clean for moving day, inside cabinets and appliances by request.', 'A thorough clean of an empty or nearly empty home before you move in or after you move out.', array['Dust accessible surfaces, furniture and décor', 'Wipe kitchen countertops, backsplash and appliance exteriors', 'Clean sinks and faucets', 'Clean and sanitize bathrooms: toilets, tubs, showers, mirrors', 'Sweep, vacuum and mop floors', 'Empty trash and replace liners', 'General tidying and making beds', 'Inside empty cabinets and drawers', 'Baseboards and door frames']::text[], array['Moving heavy furniture', 'Exterior windows', 'Carpet or upholstery shampooing', 'Mold remediation', 'Post-construction cleanup', 'Biohazard or hoarding-level cleanup', 'Large-scale organization (available as an add-on by the hour)']::text[], 'move', array['one_time']::text[], true, true, 3) on conflict (slug) do nothing;
+insert into services (slug, name, short_description, description, includes, excludes, kind, allowed_frequencies, requires_review, active, sort) values ('recurring', 'Recurring Residential Cleaning', 'Weekly, every-two-weeks, or monthly visits that keep your home consistently clean.', 'Our core service. Choose weekly, every-two-weeks or monthly visits and we keep your home at the same standard every time, following the same checklist and the notes you''ve given us about your home.
+
+How often we visit shapes the price. Weekly homes need the least catch-up work per visit, so they have the lowest per-visit rate; monthly visits include more accumulated dust and buildup, so they cost a little more each time. Recurring rates assume the schedule is kept. After a long gap, a Queen Reset may be recommended first.', array['Dust accessible surfaces, furniture and décor', 'Wipe kitchen countertops, backsplash and appliance exteriors', 'Clean sinks and faucets', 'Clean and sanitize bathrooms: toilets, tubs, showers, mirrors', 'Sweep, vacuum and mop floors', 'Empty trash and replace liners', 'General tidying and making beds']::text[], array['Moving heavy furniture', 'Exterior windows', 'Carpet or upholstery shampooing', 'Mold remediation', 'Post-construction cleanup', 'Biohazard or hoarding-level cleanup', 'Large-scale organization (available as an add-on by the hour)']::text[], 'recurring', array['weekly', 'biweekly', 'monthly']::text[], false, true, 0) on conflict (slug) do nothing;
+insert into services (slug, name, short_description, description, includes, excludes, kind, allowed_frequencies, requires_review, active, sort) values ('standard', 'One-Time Cleaning', 'A single top-to-bottom standard clean, ideal before guests or an event.', 'A single visit covering our full standard checklist, with no ongoing commitment. A good fit before guests arrive, after a busy stretch, or to try us out.
+
+One-time cleanings are priced on their own and don''t receive recurring-plan discounts. If your home hasn''t been professionally cleaned in a while, a Queen Reset is usually the better choice.', array['Dust accessible surfaces, furniture and décor', 'Wipe kitchen countertops, backsplash and appliance exteriors', 'Clean sinks and faucets', 'Clean and sanitize bathrooms: toilets, tubs, showers, mirrors', 'Sweep, vacuum and mop floors', 'Empty trash and replace liners', 'General tidying and making beds']::text[], array['Moving heavy furniture', 'Exterior windows', 'Carpet or upholstery shampooing', 'Mold remediation', 'Post-construction cleanup', 'Biohazard or hoarding-level cleanup', 'Large-scale organization (available as an add-on by the hour)']::text[], 'standard', array['one_time']::text[], false, true, 1) on conflict (slug) do nothing;
+insert into services (slug, name, short_description, description, includes, excludes, kind, allowed_frequencies, requires_review, active, sort) values ('deep', 'Deep Cleaning — Queen Reset', 'A detailed reset for homes that need extra attention or are starting a recurring plan.', 'The Queen Reset is our most detailed service: everything in a standard clean, plus the detail work that regular visits don''t reach.
+
+It''s the right starting point when a home hasn''t been professionally cleaned recently, before beginning a recurring plan, or whenever you want the whole house brought back to a fresh baseline. Because the time needed depends on the home''s condition, very heavy buildup is reviewed by our team before we confirm a price.', array['Dust accessible surfaces, furniture and décor', 'Wipe kitchen countertops, backsplash and appliance exteriors', 'Clean sinks and faucets', 'Clean and sanitize bathrooms: toilets, tubs, showers, mirrors', 'Sweep, vacuum and mop floors', 'Empty trash and replace liners', 'General tidying and making beds', 'Baseboards, door frames and light switches', 'Cabinet fronts and handles', 'Detailed scrubbing of kitchen and bathroom buildup']::text[], array['Moving heavy furniture', 'Exterior windows', 'Carpet or upholstery shampooing', 'Mold remediation', 'Post-construction cleanup', 'Biohazard or hoarding-level cleanup', 'Large-scale organization (available as an add-on by the hour)']::text[], 'deep', array['one_time']::text[], false, true, 2) on conflict (slug) do nothing;
+insert into services (slug, name, short_description, description, includes, excludes, kind, allowed_frequencies, requires_review, active, sort) values ('move', 'Move-In / Move-Out Cleaning', 'An empty-home clean for moving day, inside cabinets and appliances by request.', 'A thorough clean of an empty or nearly empty home, timed around your move. Start fresh in a new home, or hand over the keys to your landlord or buyer with the place in good order.
+
+Move cleanings vary a lot from home to home, so our team reviews each request and confirms the price and scope with you before the visit.', array['Dust accessible surfaces, furniture and décor', 'Wipe kitchen countertops, backsplash and appliance exteriors', 'Clean sinks and faucets', 'Clean and sanitize bathrooms: toilets, tubs, showers, mirrors', 'Sweep, vacuum and mop floors', 'Empty trash and replace liners', 'General tidying and making beds', 'Inside empty cabinets and drawers', 'Baseboards and door frames']::text[], array['Moving heavy furniture', 'Exterior windows', 'Carpet or upholstery shampooing', 'Mold remediation', 'Post-construction cleanup', 'Biohazard or hoarding-level cleanup', 'Large-scale organization (available as an add-on by the hour)']::text[], 'move', array['one_time']::text[], true, true, 3) on conflict (slug) do nothing;
 insert into services (slug, name, short_description, description, includes, excludes, kind, allowed_frequencies, requires_review, active, sort) values ('turnover', 'Airbnb & Short-Term Rental Turnover', 'Guest-ready turnovers between stays.', 'Turnover cleaning between guest stays, with linen changes available as an add-on.', array['Dust accessible surfaces, furniture and décor', 'Wipe kitchen countertops, backsplash and appliance exteriors', 'Clean sinks and faucets', 'Clean and sanitize bathrooms: toilets, tubs, showers, mirrors', 'Sweep, vacuum and mop floors', 'Empty trash and replace liners', 'General tidying and making beds', 'Reset for the next guest']::text[], array['Moving heavy furniture', 'Exterior windows', 'Carpet or upholstery shampooing', 'Mold remediation', 'Post-construction cleanup', 'Biohazard or hoarding-level cleanup', 'Large-scale organization (available as an add-on by the hour)', 'Restocking guest supplies unless arranged']::text[], 'turnover', array['one_time']::text[], true, false, 4) on conflict (slug) do nothing;
-insert into services (slug, name, short_description, description, includes, excludes, kind, allowed_frequencies, requires_review, active, sort) values ('custom', 'Other / Custom Request', 'Something else in mind? Tell us and we''ll prepare a custom quote.', 'For anything that doesn''t fit our standard services. We''ll review your request and send a custom quote.', '{}'::text[], '{}'::text[], 'custom', array['one_time']::text[], true, true, 5) on conflict (slug) do nothing;
+insert into services (slug, name, short_description, description, includes, excludes, kind, allowed_frequencies, requires_review, active, sort) values ('commercial', 'Commercial Cleaning', 'Offices and small commercial spaces.', 'Cleaning for offices and small commercial spaces, quoted individually after a walkthrough.', '{}'::text[], '{}'::text[], 'custom', array['one_time', 'weekly', 'biweekly', 'monthly']::text[], true, false, 5) on conflict (slug) do nothing;
+insert into services (slug, name, short_description, description, includes, excludes, kind, allowed_frequencies, requires_review, active, sort) values ('custom', 'Other / Custom Request', 'Something else in mind? Tell us and we''ll prepare a custom quote.', 'For anything that doesn''t fit our standard services. We''ll review your request and send a custom quote.', '{}'::text[], '{}'::text[], 'custom', array['one_time']::text[], true, true, 6) on conflict (slug) do nothing;
 insert into addons (slug, name, description, sort) values ('inside-oven', 'Inside oven', 'Degrease and wipe the oven interior and racks.', 0) on conflict (slug) do nothing;
 insert into addons (slug, name, description, sort) values ('inside-fridge', 'Inside refrigerator', 'Empty-shelf wipe-down of the refrigerator interior.', 1) on conflict (slug) do nothing;
 insert into addons (slug, name, description, sort) values ('inside-cabinets', 'Inside cabinets', 'Wipe inside kitchen cabinets (please empty them first).', 2) on conflict (slug) do nothing;

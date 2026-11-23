@@ -1,4 +1,5 @@
 import "server-only";
+import { listCustomerRates } from "./customer-rates";
 import { z } from "zod";
 import { db, type Tx } from "@/lib/db";
 import { audit, type Actor } from "./audit";
@@ -9,7 +10,7 @@ export const customerInputSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email").max(200).or(z.literal("")).transform((v) => v || null),
   phone: z.string().trim().max(40).transform((v) => v || null),
   preferred_contact: z.enum(["email", "phone", "text"]),
-  status: z.enum(["lead", "active", "inactive", "archived"]),
+  status: z.enum(["lead", "active", "inactive", "archived", "unverified"]),
   preferences: z.string().max(3000),
   private_notes: z.string().max(5000),
   source: z.enum(["website", "admin", "import", "referral"]).default("admin"),
@@ -40,6 +41,7 @@ export type PropertyEdit = z.input<typeof propertyEditSchema>;
 export type CustomerListRow = {
   id: string; full_name: string; email: string | null; phone: string | null; status: string; source: string; created_at: Date;
   city: string | null; area: string | null; last_visit: Date | null; next_visit: Date | null; completed_count: number; lifetime_cents: number; recurring: string | null;
+  preferred_frequency: string | null; rate_cents: number | null; rate_frequency: string | null; rate_kind: string | null;
 };
 
 export async function listCustomers(f: { q?: string; status?: string; sort?: string; area?: string; limit: number; offset: number }) {
@@ -55,10 +57,13 @@ export async function listCustomers(f: { q?: string; status?: string; sort?: str
            (select min(starts_at) from appointments a where a.customer_id = c.id and a.status in ('pending','confirmed') and a.starts_at > now()) as next_visit,
            (select count(*)::int from appointments a where a.customer_id = c.id and a.status = 'completed') as completed_count,
            (select coalesce(sum(j.revenue_cents),0)::int from job_records j join appointments a on a.id = j.appointment_id where a.customer_id = c.id and a.status = 'completed') as lifetime_cents,
-           (select frequency from recurring_series s where s.customer_id = c.id and s.status = 'active' limit 1) as recurring
+           (select frequency from recurring_series s where s.customer_id = c.id and s.status = 'active' limit 1) as recurring,
+           c.preferred_frequency,
+           r.price_cents as rate_cents, r.frequency as rate_frequency, r.kind as rate_kind
       from customers c
       left join lateral (select * from properties p where p.customer_id = c.id order by is_primary desc, created_at limit 1) p on true
       left join service_areas sa on sa.id = p.service_area_id
+      left join lateral (select price_cents, frequency, kind from customer_rates r where r.customer_id = c.id and r.status = 'active' order by r.created_at desc limit 1) r on true
      where c.merged_into_id is null
        and (${status}::text is null or c.status = ${status})
        and (${status}::text is not null or c.status <> 'archived')
@@ -80,7 +85,9 @@ export async function getCustomerProfile(id: string) {
   const [c] = await sql<{
     id: string; full_name: string; email: string | null; phone: string | null; preferred_contact: string; status: string; customer_since: string | null;
     preferences: string; private_notes: string; source: string; marketing_consent: boolean; booking_comms_consent: boolean; merged_into_id: string | null; created_at: Date;
-  }[]>`select id, full_name, email, phone, preferred_contact, status, customer_since::text, preferences, private_notes, source, marketing_consent, booking_comms_consent, merged_into_id, created_at from customers where id = ${id}`;
+    preferred_frequency: string | null; import_ref: string | null;
+  }[]>`select id, full_name, email, phone, preferred_contact, status, customer_since::text, preferences, private_notes, source, marketing_consent, booking_comms_consent, merged_into_id, created_at,
+              preferred_frequency, import_ref from customers where id = ${id}`;
   if (!c) return null;
   const [properties, appointments, quotes, series, comms, payments, duplicates, messages] = await Promise.all([
     sql<(PropertyEdit & { id: string; area: string | null; appt_count: number })[]>`
@@ -115,6 +122,7 @@ export async function getCustomerProfile(id: string) {
     duplicates,
     messages: Array.from(messages).map((x) => ({ ...x })),
     finance: await customerFinancials(id),
+    rates: await listCustomerRates(id),
   };
 }
 

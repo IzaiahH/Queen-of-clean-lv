@@ -25,8 +25,10 @@ export async function appointmentPanelAction(id: string) {
 export async function searchCustomersAction(q: string) {
   return guard("customers.view", async () => {
     const term = `%${z.string().max(100).parse(q).trim().toLowerCase()}%`;
-    const rows = await db()<{ id: string; full_name: string; email: string | null; phone: string | null; properties: { id: string; label: string; address: string | null; has_address: boolean }[]; last_price: number | null; last_minutes: number | null }[]>`
+    const rows = await db()<{ id: string; full_name: string; email: string | null; phone: string | null; properties: { id: string; label: string; address: string | null; has_address: boolean }[]; last_price: number | null; last_minutes: number | null; rates: { service_slug: string; frequency: string; price_cents: number; kind: "historical" | "custom" }[] }[]>`
       select c.id, c.full_name, c.email, c.phone,
+             coalesce((select json_agg(json_build_object('service_slug', r.service_slug, 'frequency', r.frequency, 'price_cents', r.price_cents, 'kind', r.kind) order by r.created_at)
+                       from customer_rates r where r.customer_id = c.id and r.status = 'active'), '[]') as rates,
              coalesce((select json_agg(json_build_object('id', p.id, 'label', p.label, 'address', concat_ws(', ', p.address_line1, p.unit, p.city), 'has_address', p.address_line1 is not null) order by p.is_primary desc)
                        from properties p where p.customer_id = c.id), '[]') as properties,
              (select agreed_price_cents from appointments a where a.customer_id = c.id order by starts_at desc limit 1) as last_price,

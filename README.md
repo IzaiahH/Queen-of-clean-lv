@@ -141,6 +141,12 @@ Optional synthetic demo data (invented names, `example.com` addresses; refuses t
 npm run db:seed:demo
 ```
 
+Existing customers with their historical rates (keep the real file in `private/`, which git ignores; preview first, then `--apply`). See [docs/existing-customer-import.md](docs/existing-customer-import.md):
+
+```bash
+npm run import:existing -- private/existing-customers.json
+```
+
 ## Supabase setup
 
 1. **Create a project** at supabase.com in a US West region.

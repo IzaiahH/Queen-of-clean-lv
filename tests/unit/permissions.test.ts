@@ -17,6 +17,14 @@ describe("permissions", () => {
     expect(can("office", "cleaners.pay")).toBe(false);
     expect(can("office", "pricing.edit")).toBe(false);
   });
+  it("customer-specific rates: owner and admin change them, office staff only see them, cleaners neither", () => {
+    expect(can("owner", "customers.rates")).toBe(true);
+    expect(can("admin", "customers.rates")).toBe(true);
+    expect(can("office", "customers.rates")).toBe(false);
+    expect(can("office", "customers.view")).toBe(true); // sees rates on profiles and when booking
+    expect(can("cleaner", "customers.rates")).toBe(false);
+    expect(can("cleaner", "customers.view")).toBe(false);
+  });
   it("only the owner manages staff accounts", () => {
     expect(can("owner", "users.manage")).toBe(true);
     expect(can("admin", "users.manage")).toBe(false);
