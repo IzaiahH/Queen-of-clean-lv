@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
+import sharp from "sharp";
 import { loadEnv } from "../../scripts/env";
 import { CLEANER, OWNER } from "./accounts";
 import { signIn } from "./helpers";
@@ -18,8 +19,9 @@ test("public booking on mobile → confirm → assign → cleaner sees it → co
   await page.locator("#main").getByText("Recurring Residential Cleaning").click();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByLabel("Approximate square footage").fill("1600");
-  await page.getByText("Average — due for a good clean").click();
+  await page.getByRole("radio", { name: /^Average/ }).check();
   await page.getByRole("radio", { name: "Yes" }).check();
+  await page.getByRole("checkbox", { name: "Tile" }).check();
   await page.getByLabel("Street address").fill("742 Synthetic Ave");
   await page.getByLabel("City").fill("Las Vegas");
   await page.getByLabel("ZIP code").fill("89123");
@@ -37,9 +39,14 @@ test("public booking on mobile → confirm → assign → cleaner sees it → co
   await page.getByLabel("Full name").fill(name);
   await page.getByRole("textbox", { name: "Email" }).fill(email);
   await page.getByRole("textbox", { name: "Phone" }).fill("702-555-0188");
+  await page.getByLabel("Parking instructions").fill("Driveway (synthetic)");
+  const photo = await sharp({ create: { width: 1200, height: 900, channels: 3, background: { r: 230, g: 215, b: 180 } } }).jpeg().toBuffer();
+  await page.locator("#property-photos").setInputFiles({ name: "kitchen.jpg", mimeType: "image/jpeg", buffer: photo });
+  await expect(page.getByRole("img", { name: "Your photo 1" })).toBeVisible();
   await page.getByRole("checkbox", { name: /I agree/ }).check();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.waitForTimeout(8500); // the API rejects submissions made faster than a person could fill in the form
+  await expect(page.getByText("1 attached")).toBeVisible();
   await page.getByRole("button", { name: "Submit booking request" }).click();
   await expect(page.getByRole("heading", { name: "Request received" })).toBeVisible();
   // No email provider in local tests: the page must not claim an email went out.
@@ -54,6 +61,11 @@ test("public booking on mobile → confirm → assign → cleaner sees it → co
   await owner.getByRole("link", { name: new RegExp(name) }).first().click();
   await expect(owner).toHaveURL(/\/admin\/appointments\/[0-9a-f-]+/);
   const apptUrl = owner.url();
+  // The customer's photo and home details reach the office, through the staff-only image route.
+  await expect(owner.getByText("Driveway (synthetic)", { exact: true })).toBeVisible();
+  const photoSrc = await owner.getByRole("img", { name: "Property photo 1 from the customer" }).getAttribute("src");
+  expect((await owner.request.get(photoSrc!)).status()).toBe(200);
+  expect((await page.request.get(photoSrc!)).status()).toBe(401); // the customer's browser, not signed in as staff
   await owner.getByRole("button", { name: "Confirm" }).click();
   await expect(owner.getByText("Confirmed", { exact: true }).first()).toBeVisible();
 

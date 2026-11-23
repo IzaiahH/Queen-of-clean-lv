@@ -20,6 +20,18 @@ export type PropertyInput = z.infer<typeof propertyInputSchema>;
 
 const trimmed = (max: number) => z.string().trim().max(max);
 
+export const FLOORING = ["tile", "hardwood", "laminate_vinyl", "carpet", "stone", "other"] as const;
+export const FLOORING_LABELS: Record<(typeof FLOORING)[number], string> = {
+  tile: "Tile",
+  hardwood: "Hardwood",
+  laminate_vinyl: "Laminate / vinyl",
+  carpet: "Carpet",
+  stone: "Natural stone / marble",
+  other: "Other",
+};
+export const MOVE_TYPES = ["move_in", "move_out"] as const;
+export const MOVE_TYPE_LABELS: Record<(typeof MOVE_TYPES)[number], string> = { move_in: "Move-in cleaning", move_out: "Move-out cleaning" };
+
 export const bookingRequestSchema = z
   .object({
     idempotency_key: z.string().uuid(),
@@ -32,6 +44,8 @@ export const bookingRequestSchema = z
       pet_details: trimmed(300).optional().default(""),
       occupancy: trimmed(300).optional().default(""),
       special_requests: trimmed(1000).optional().default(""),
+      move_type: z.enum(MOVE_TYPES).nullable().optional().default(null),
+      flooring: z.array(z.enum(FLOORING)).max(FLOORING.length).optional().default([]),
     }),
     schedule: z.object({
       slot_start: z.string().datetime({ offset: true }).nullable(),
@@ -51,9 +65,12 @@ export const bookingRequestSchema = z
         }, "Enter a 10-digit US phone number"),
       preferred_contact: z.enum(["email", "phone", "text"]),
       access_instructions: trimmed(1000).optional().default(""),
+      parking_instructions: trimmed(500).optional().default(""),
       notes: trimmed(1000).optional().default(""),
       consent: z.literal(true, { message: "Please agree so we can contact you about this booking" }),
     }),
+    /** Property photos uploaded beforehand; each key proves this browser uploaded it. */
+    photos: z.array(z.object({ id: z.string().uuid(), key: z.string().min(20).max(200) })).max(6).optional().default([]),
     /** Honeypot: real people never see or fill this field. */
     website: z.string().max(0).optional().default(""),
     /** When the form was opened (ms). Submissions faster than a human could type are rejected. */

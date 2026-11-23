@@ -10,7 +10,7 @@ export const OWNER = { id: null, label: "Test owner" };
 export async function resetData() {
   // Plain deletes (not TRUNCATE ... CASCADE, which would also wipe profiles and pricing via their FKs).
   await db().begin(async (tx) => {
-    for (const t of ["communications", "payments", "expenses", "audit_logs", "import_batches", "contact_messages", "rate_limits",
+    for (const t of ["uploaded_images", "communications", "payments", "expenses", "audit_logs", "import_batches", "contact_messages", "rate_limits",
       "appointments", "recurring_series", "quotes", "customers", "sessions", "profiles", "cleaners", "settings"]) await tx.unsafe(`delete from ${t}`);
   });
 }

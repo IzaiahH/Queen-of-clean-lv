@@ -50,7 +50,10 @@ export function BusinessSettings({ initial }: { initial: Settings["business"] })
         <Text label="Headline" value={v.hero_headline} max={120} onChange={(x) => setV({ ...v, hero_headline: x })} />
         <Area label="Supporting text" value={v.hero_subtext} max={400} rows={3} onChange={(x) => setV({ ...v, hero_subtext: x })} />
         <div className="grid gap-4 sm:grid-cols-2">
-          <Text label="Hero photo address (optional)" value={v.hero_image_url} max={500} onChange={(x) => setV({ ...v, hero_image_url: x.trim() })} hint="An https:// image link, or a path like /images/hero.jpg. Leave blank to show your logo instead. Use your own photos, not stock pictures presented as your work." />
+          <div className="space-y-2">
+            <Text label="Hero photo (optional)" value={v.hero_image_url} max={500} onChange={(x) => setV({ ...v, hero_image_url: x.trim() })} hint="Upload a photo, or paste an https:// image link. Leave blank to show your logo instead. Use your own photos, not stock pictures presented as your work." />
+            <HeroImageUpload url={v.hero_image_url} onUploaded={(url) => setV({ ...v, hero_image_url: url })} />
+          </div>
           <Text label="Photo description (for screen readers and search)" value={v.hero_image_alt} max={200} onChange={(x) => setV({ ...v, hero_image_alt: x })} hint="e.g. Bright, freshly cleaned kitchen in a Summerlin home" />
         </div>
       </fieldset>
@@ -331,4 +334,42 @@ export function TeamEditor({ staff, cleaners, currentUserId, provider }: { staff
 export function RetryEmailButton({ id }: { id: string }) {
   const { run, pending } = useAction();
   return <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => run(() => retryEmailAction(id))}>{pending ? "Retrying…" : "Retry"}</button>;
+}
+
+/** Uploads a website photo (re-encoded on the server, location data removed) and fills in its address. Save to publish. */
+function HeroImageUpload({ url, onUploaded }: { url: string; onUploaded: (url: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function upload(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    setError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/admin/site-images", { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) setError(data.error ?? "Upload failed.");
+      else onUploaded(data.url);
+    } catch {
+      setError("Upload failed. Check your connection.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      {url && (
+        // eslint-disable-next-line @next/next/no-img-element -- owner-chosen image preview
+        <img src={url} alt="Current hero photo" className="h-16 w-24 rounded border border-line object-cover" />
+      )}
+      <label className={`btn btn-outline btn-sm cursor-pointer ${busy ? "pointer-events-none opacity-60" : ""}`}>
+        {busy ? "Uploading…" : url ? "Replace photo" : "Upload photo"}
+        <input type="file" accept="image/*" className="sr-only" onChange={(e) => void upload(e.target.files?.[0])} />
+      </label>
+      {url && <button type="button" className="btn btn-ghost btn-sm" onClick={() => onUploaded("")}>Remove</button>}
+      {url && <span className="text-xs text-muted">Press Save to publish changes.</span>}
+      {error && <p className="field-error w-full" role="alert">{error}</p>}
+    </div>
+  );
 }

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { audit, SYSTEM_ACTOR } from "@/lib/server/audit";
 import { sendDueCustomerEmails } from "@/lib/server/appointments";
 import { expireQuotes } from "@/lib/server/quotes-admin";
+import { purgeAbandonedPhotos } from "@/lib/server/images";
 import { generateAllSeries } from "@/lib/server/series";
 import { loadSettings } from "@/lib/server/settings";
 
@@ -35,7 +36,8 @@ export async function GET(req: Request) {
     const msgs = await db()`delete from contact_messages where status in ('handled','spam') and created_at < now() - make_interval(days => ${s.privacy.contact_message_retention_days})`;
     const sessions = await db()`delete from sessions where expires_at < now()`;
     const limits = await db()`delete from rate_limits where window_start < now() - interval '1 day'`;
-    return { contact_messages: msgs.count, sessions: sessions.count, rate_limits: limits.count };
+    const abandonedPhotos = await purgeAbandonedPhotos();
+    return { contact_messages: msgs.count, sessions: sessions.count, rate_limits: limits.count, abandoned_photos: abandonedPhotos };
   });
   await audit(SYSTEM_ACTOR, "cron.daily", "system", null, result);
   return Response.json({ ok: true, ...result });

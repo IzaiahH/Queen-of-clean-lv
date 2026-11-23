@@ -10,6 +10,9 @@ import { formatCents } from "@/lib/money";
 import { CONDITION_LABELS, FREQUENCY_LABELS, type Condition, type Frequency } from "@/lib/pricing/rules";
 import { staffFormOptions } from "@/lib/server/admin-queries";
 import { getQuoteDetail } from "@/lib/server/quotes-admin";
+import { photosFor } from "@/lib/server/images";
+import { PropertyPhotos } from "@/components/admin/PropertyPhotos";
+import { FLOORING_LABELS, MOVE_TYPE_LABELS } from "@/lib/validation/booking";
 import { getSettings } from "@/lib/server/settings";
 import { formatDate, formatDateTime, minutesLabel } from "@/lib/time";
 
@@ -19,14 +22,14 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
   const user = await requirePage("quotes.view");
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const [d, opts, settings] = await Promise.all([getQuoteDetail(id), staffFormOptions(), getSettings()]);
+  const [d, opts, settings, photos] = await Promise.all([getQuoteDetail(id), staffFormOptions(), getSettings(), photosFor({ quoteId: id })]);
   if (!d) notFound();
   const { q } = d;
   const tz = settings.booking.timezone;
   const customer = q.customer_id ? await db()<{ id: string; label: string; address: string; has_address: boolean }[]>`
     select id, label, concat_ws(', ', address_line1, unit, city) as address, address_line1 is not null as has_address from properties where customer_id = ${q.customer_id} order by is_primary desc`
     .then((props) => ({ id: q.customer_id!, full_name: q.customer_name ?? "", email: q.customer_email, phone: q.customer_phone, properties: Array.from(props).map((p) => ({ ...p })), last_price: null, last_minutes: null })) : null;
-  const inputs = q.inputs as { bedrooms?: number; full_baths?: number; half_baths?: number; sqft?: number | null; condition?: Condition | null; pets?: number; area?: string | null; staff_notes?: string; special_requests?: string; recently_cleaned?: string };
+  const inputs = q.inputs as { bedrooms?: number; full_baths?: number; half_baths?: number; sqft?: number | null; condition?: Condition | null; pets?: number; area?: string | null; staff_notes?: string; special_requests?: string; recently_cleaned?: string; move_type?: keyof typeof MOVE_TYPE_LABELS | null; flooring?: (keyof typeof FLOORING_LABELS)[]; occupancy?: string; property_type?: string };
   const amount = q.override_cents ?? q.estimate_cents;
 
   return (
@@ -62,11 +65,13 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
         <section className="card p-5">
           <h2 className="text-2xl font-semibold">Details</h2>
           <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-            <dt className="text-muted">Service</dt><dd>{q.service_name}</dd>
+            <dt className="text-muted">Service</dt><dd>{q.service_name}{inputs.move_type ? ` — ${MOVE_TYPE_LABELS[inputs.move_type]}` : ""}</dd>
             <dt className="text-muted">Frequency</dt><dd>{FREQUENCY_LABELS[q.frequency as Frequency] ?? q.frequency}</dd>
             <dt className="text-muted">Home</dt><dd>{inputs.bedrooms ?? "?"} bed · {inputs.full_baths ?? "?"} bath{inputs.half_baths ? ` + ${inputs.half_baths} half` : ""}{inputs.sqft ? ` · ${inputs.sqft.toLocaleString()} sq ft` : q.breakdown.sqft_assumed ? " · sq ft assumed" : ""}</dd>
             <dt className="text-muted">Condition</dt><dd>{inputs.condition ? CONDITION_LABELS[inputs.condition] : "Not given"}</dd>
             <dt className="text-muted">Pets</dt><dd>{inputs.pets ?? 0}</dd>
+            {inputs.flooring && inputs.flooring.length > 0 && <><dt className="text-muted">Flooring</dt><dd>{inputs.flooring.map((f) => FLOORING_LABELS[f] ?? f).join(", ")}</dd></>}
+            {inputs.occupancy && <><dt className="text-muted">Household</dt><dd>{inputs.occupancy}</dd></>}
             <dt className="text-muted">Area</dt><dd>{inputs.area ?? "Outside listed areas"}</dd>
             <dt className="text-muted">Address</dt><dd>{q.has_address ? q.address : "—"}</dd>
             <dt className="text-muted">Est. time</dt><dd>{minutesLabel(q.estimated_minutes)}</dd>
@@ -76,6 +81,8 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
             {q.accepted_at && <><dt className="text-muted">Accepted</dt><dd>{formatDateTime(q.accepted_at, tz)}</dd></>}
           </dl>
           {(inputs.special_requests || inputs.staff_notes) && <p className="mt-3 whitespace-pre-wrap rounded-[var(--radius-control)] bg-cream p-3 text-sm">{inputs.special_requests || inputs.staff_notes}</p>}
+          <h3 className="mt-5 text-lg font-semibold">Customer photos</h3>
+          <div className="mt-2"><PropertyPhotos photos={photos} /></div>
         </section>
       </div>
 

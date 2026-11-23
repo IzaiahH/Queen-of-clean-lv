@@ -15,6 +15,7 @@ export type PricedQuote = {
   area: AreaRow | null;
   areaMessage: string | null;
   serviceName: string;
+  serviceKind: string;
 };
 
 /** Prices customer-submitted details against the published rules and enabled catalog. */
@@ -53,7 +54,7 @@ export async function priceFromProperty(p: PropertyInput, tx: Tx = db()): Promis
     result.requires_review = true;
     result.review_reasons.push(`${service.name} requests are confirmed after a quick review.`);
   }
-  return { versionId: pricing.id, version: pricing.version, result, input, area: area.area, areaMessage: area.message, serviceName: service.name };
+  return { versionId: pricing.id, version: pricing.version, result, input, area: area.area, areaMessage: area.message, serviceName: service.name, serviceKind: service.kind };
 }
 
 export async function insertQuote(

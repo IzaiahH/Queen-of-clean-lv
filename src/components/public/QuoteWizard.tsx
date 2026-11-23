@@ -7,6 +7,16 @@ import { Field } from "@/components/ui/Field";
 import { formatCents } from "@/lib/money";
 import { CONDITION_LABELS, FREQUENCY_LABELS, type Condition, type Frequency } from "@/lib/pricing/rules";
 import { minutesLabel } from "@/lib/time";
+import { FLOORING, FLOORING_LABELS, MOVE_TYPE_LABELS } from "@/lib/validation/booking";
+import { PhotoUploader, type UploadedPhoto } from "./PhotoUploader";
+
+/** Short descriptions under each condition choice (the labels themselves are the business's wording). */
+const CONDITION_HINTS: Record<Condition, string> = {
+  light: "Cleaned regularly; light dust and everyday use.",
+  standard: "Due for a good clean; some buildup in kitchen and bathrooms.",
+  heavy: "Noticeable buildup, or it's been a while since the last clean.",
+  extreme: "Heavy grime, clutter or long overdue. Our team reviews these before confirming a price.",
+};
 
 export type WizardCatalog = {
   services: { slug: string; name: string; short: string; frequencies: Frequency[]; kind: string }[];
@@ -44,6 +54,7 @@ type Day = { date: string; label: string; slots: Slot[] };
 
 type State = {
   service: string;
+  move_type: "move_in" | "move_out" | "";
   frequency: Frequency | "";
   property_type: "house" | "townhome" | "condo" | "apartment" | "other";
   bedrooms: number;
@@ -55,6 +66,7 @@ type State = {
   recently_cleaned: "yes" | "no" | "not_sure" | "";
   pets: number;
   pet_details: string;
+  flooring: (typeof FLOORING)[number][];
   occupancy: string;
   special_requests: string;
   address_line1: string;
@@ -72,6 +84,8 @@ type State = {
   phone: string;
   preferred_contact: "email" | "phone" | "text";
   access_instructions: string;
+  parking_instructions: string;
+  photos: UploadedPhoto[];
   notes: string;
   consent: boolean;
   mode: "book" | "quote_only";
@@ -82,6 +96,7 @@ const STORAGE_KEY = "qoc-quote-wizard-v1";
 
 const initial = (service: string | null): State => ({
   service: service ?? "",
+  move_type: "",
   frequency: "",
   property_type: "house",
   bedrooms: 2,
@@ -93,6 +108,7 @@ const initial = (service: string | null): State => ({
   recently_cleaned: "",
   pets: 0,
   pet_details: "",
+  flooring: [],
   occupancy: "",
   special_requests: "",
   address_line1: "",
@@ -110,6 +126,8 @@ const initial = (service: string | null): State => ({
   phone: "",
   preferred_contact: "email",
   access_instructions: "",
+  parking_instructions: "",
+  photos: [],
   notes: "",
   consent: false,
   mode: "book",
@@ -147,7 +165,7 @@ export function QuoteWizard({ catalog, initialService, initialFrequency = null }
       const raw = sessionStorage.getItem(STORAGE_KEY);
       if (raw) {
         const saved = JSON.parse(raw) as { s: State; step: number; key: string; startedAt: number };
-        setS({ ...initial(null), ...saved.s, slot: null, ...(validInitial && !saved.s.service ? { service: validInitial } : {}) });
+        setS({ ...initial(null), ...saved.s, photos: (saved.s.photos ?? []).map((p) => ({ id: p.id, key: p.key })), slot: null, ...(validInitial && !saved.s.service ? { service: validInitial } : {}) });
         setStep(Math.min(saved.step, 2));
         idemKey.current = saved.key;
         startedAt.current = saved.startedAt;
@@ -196,6 +214,7 @@ export function QuoteWizard({ catalog, initialService, initialFrequency = null }
   function validate(i: number): Record<string, string> {
     const e: Record<string, string> = {};
     if (i === 0 && !service) e.service = "Choose a service to continue";
+    if (i === 0 && service?.kind === "move" && !s.move_type) e.service = "Choose move-in or move-out cleaning";
     if (i === 1) {
       if (!s.sqft_unknown && s.sqft !== "" && (!/^\d+$/.test(s.sqft) || Number(s.sqft) < 100 || Number(s.sqft) > 50000)) e.sqft = "Enter a number between 100 and 50,000, or choose “Not sure”";
       if (!s.sqft_unknown && s.sqft === "") e.sqft = "Enter the approximate square footage, or choose “Not sure”";
@@ -313,6 +332,8 @@ export function QuoteWizard({ catalog, initialService, initialFrequency = null }
         pet_details: s.pet_details,
         occupancy: s.occupancy,
         special_requests: s.special_requests,
+        move_type: service?.kind === "move" ? s.move_type || null : null,
+        flooring: s.flooring,
       },
       schedule: { slot_start: s.mode === "book" ? s.slot?.start ?? null : null, preferred_window: s.preferred_window, preferences: s.preferences, wants_recurring: s.wants_recurring },
       contact: {
@@ -321,9 +342,11 @@ export function QuoteWizard({ catalog, initialService, initialFrequency = null }
         phone: s.phone,
         preferred_contact: s.preferred_contact,
         access_instructions: s.access_instructions,
+        parking_instructions: s.parking_instructions,
         notes: s.notes,
         consent: s.consent,
       },
+      photos: s.photos.map(({ id, key }) => ({ id, key })),
       website: (document.getElementById("qoc-website") as HTMLInputElement | null)?.value ?? "",
       started_at: startedAt.current,
     };
@@ -401,15 +424,27 @@ export function QuoteWizard({ catalog, initialService, initialFrequency = null }
             <fieldset>
               <legend className="sr-only">Service</legend>
               <div className="grid gap-3" data-error={Boolean(errors.service)} tabIndex={errors.service ? -1 : undefined}>
-                {catalog.services.map((x) => (
-                  <label key={x.slug} className="choice">
-                    <input type="radio" name="service" className="mt-1 accent-[var(--color-gold)]" checked={s.service === x.slug} onChange={() => setS((p) => ({ ...p, service: x.slug, frequency: x.frequencies.length === 1 ? x.frequencies[0] : x.frequencies.includes(p.frequency as Frequency) ? p.frequency : "" }))} />
-                    <span>
-                      <span className="block font-semibold">{x.name}</span>
-                      <span className="block text-sm text-muted">{x.short}</span>
-                    </span>
-                  </label>
-                ))}
+                {catalog.services.flatMap((x) => {
+                  const pick = (move: State["move_type"]) =>
+                    setS((p) => ({ ...p, service: x.slug, move_type: move, frequency: x.frequencies.length === 1 ? x.frequencies[0] : x.frequencies.includes(p.frequency as Frequency) ? p.frequency : "" }));
+                  // Move cleanings are one service with two entry points, so customers pick the one that matches their move.
+                  const options: { key: string; name: string; short: string; move: State["move_type"] }[] =
+                    x.kind === "move"
+                      ? [
+                          { key: `${x.slug}:in`, name: MOVE_TYPE_LABELS.move_in, short: "A thorough clean of your new home before you settle in.", move: "move_in" },
+                          { key: `${x.slug}:out`, name: MOVE_TYPE_LABELS.move_out, short: "Leave your old home ready for the landlord, buyer or next tenant.", move: "move_out" },
+                        ]
+                      : [{ key: x.slug, name: x.name, short: x.short, move: "" }];
+                  return options.map((o) => (
+                    <label key={o.key} className="choice">
+                      <input type="radio" name="service" className="mt-1 accent-[var(--color-gold)]" checked={s.service === x.slug && (x.kind !== "move" || s.move_type === o.move)} onChange={() => pick(o.move)} />
+                      <span>
+                        <span className="block font-semibold">{o.name}</span>
+                        <span className="block text-sm text-muted">{o.short}</span>
+                      </span>
+                    </label>
+                  ));
+                })}
               </div>
               {errors.service && <p className="field-error" role="alert">{errors.service}</p>}
             </fieldset>
@@ -450,7 +485,10 @@ export function QuoteWizard({ catalog, initialService, initialFrequency = null }
                   {(Object.keys(CONDITION_LABELS) as Condition[]).map((c) => (
                     <label key={c} className="choice py-3">
                       <input type="radio" name="condition" className="mt-1 accent-[var(--color-gold)]" checked={s.condition === c} onChange={() => set("condition", c)} />
-                      <span className="text-sm">{CONDITION_LABELS[c]}</span>
+                      <span>
+                        <span className="block text-sm font-semibold">{CONDITION_LABELS[c]}</span>
+                        <span className="block text-xs text-muted">{CONDITION_HINTS[c]}</span>
+                      </span>
                     </label>
                   ))}
                   <label className="choice py-3">
@@ -480,6 +518,24 @@ export function QuoteWizard({ catalog, initialService, initialFrequency = null }
                   </Field>
                 )}
               </div>
+              <fieldset>
+                <legend className="field-label">
+                  Flooring in the home <span className="font-normal text-muted">(choose all that apply)</span>
+                </legend>
+                <div className="flex flex-wrap gap-2">
+                  {FLOORING.map((f) => (
+                    <label key={f} className="choice px-4 py-2.5">
+                      <input
+                        type="checkbox"
+                        className="accent-[var(--color-gold)]"
+                        checked={s.flooring.includes(f)}
+                        onChange={(e) => set("flooring", e.target.checked ? [...s.flooring, f] : s.flooring.filter((x) => x !== f))}
+                      />
+                      <span className="text-sm">{FLOORING_LABELS[f]}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
               <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
                 <Field label="Street address" error={errors.address_line1}>
                   {(p) => <input {...p} className="input" autoComplete="address-line1" value={s.address_line1} onChange={(e) => set("address_line1", e.target.value)} />}
@@ -496,7 +552,7 @@ export function QuoteWizard({ catalog, initialService, initialFrequency = null }
                   {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="postal-code" maxLength={5} value={s.zip} onChange={(e) => set("zip", e.target.value.replace(/\D/g, ""))} />}
                 </Field>
               </div>
-              <Field label="Occupancy or access needs" optional hint="e.g. home will be occupied, gated community, work-from-home hours">
+              <Field label="Who lives in the home?" optional hint="e.g. 2 adults and 1 child, or someone works from home during the day">
                 {(p) => <input {...p} className="input" maxLength={300} value={s.occupancy} onChange={(e) => set("occupancy", e.target.value)} />}
               </Field>
               <Field label="Anything else we should know?" optional>
@@ -662,10 +718,16 @@ export function QuoteWizard({ catalog, initialService, initialFrequency = null }
                 )}
               </Field>
               {s.mode === "book" && (
-                <Field label="Entry instructions" optional hint="Gate, parking, lockbox or key details. Only our team can see this, and it's never included in emails.">
-                  {(p) => <textarea {...p} className="input" rows={3} maxLength={1000} value={s.access_instructions} onChange={(e) => set("access_instructions", e.target.value)} />}
-                </Field>
+                <>
+                  <Field label="Entry instructions" optional hint="Gate code, lockbox or key details. Only our team can see this, and it's never included in emails.">
+                    {(p) => <textarea {...p} className="input" rows={3} maxLength={1000} value={s.access_instructions} onChange={(e) => set("access_instructions", e.target.value)} />}
+                  </Field>
+                  <Field label="Parking instructions" optional hint="Where our team should park, e.g. driveway, street, or visitor spaces.">
+                    {(p) => <input {...p} className="input" maxLength={500} value={s.parking_instructions} onChange={(e) => set("parking_instructions", e.target.value)} />}
+                  </Field>
+                </>
               )}
+              <PhotoUploader photos={s.photos} onChange={(update) => setS((p) => ({ ...p, photos: update(p.photos) }))} />
               <Field label="Notes for our team" optional>
                 {(p) => <textarea {...p} className="input" rows={3} maxLength={1000} value={s.notes} onChange={(e) => set("notes", e.target.value)} />}
               </Field>
@@ -936,7 +998,7 @@ function Review({ s, estimate, catalog, serviceName, addons, onEdit }: { s: Stat
   return (
     <div className="space-y-4">
       <Section onEdit={onEdit} title="Service" step={0}>
-        <Row k="Service" v={serviceName} />
+        <Row k="Service" v={s.move_type ? MOVE_TYPE_LABELS[s.move_type] : serviceName} />
         <Row k="Frequency" v={FREQUENCY_LABELS[s.frequency as Frequency]} />
         <Row k="Extras" v={chosenAddons.length ? chosenAddons.map((a) => `${a.name}${a.unit === "each" ? ` ×${s.addons[a.slug]}` : ""}`).join(", ") : "None"} />
       </Section>
@@ -946,6 +1008,7 @@ function Review({ s, estimate, catalog, serviceName, addons, onEdit }: { s: Stat
         <Row k="Size" v={s.sqft_unknown ? "Not sure" : `${Number(s.sqft).toLocaleString()} sq ft`} />
         <Row k="Condition" v={s.condition === "not_sure" ? "Not sure" : CONDITION_LABELS[s.condition as Condition]} />
         <Row k="Pets" v={s.pets ? `${s.pets}${s.pet_details ? ` — ${s.pet_details}` : ""}` : "None"} />
+        {s.flooring.length > 0 && <Row k="Flooring" v={s.flooring.map((f) => FLOORING_LABELS[f]).join(", ")} />}
       </Section>
       <Section onEdit={onEdit} title="Estimate" step={3}>
         {estimate.mode === "custom" ? <Row k="Price" v="Custom quote after review" /> : estimate.lines.map((l, i) => <Row key={i} k={l.label} v={formatCents(l.amount_cents)} />)}
@@ -964,6 +1027,8 @@ function Review({ s, estimate, catalog, serviceName, addons, onEdit }: { s: Stat
         <Row k="Phone" v={s.phone} />
         <Row k="Preferred contact" v={s.preferred_contact === "text" ? "Text message" : s.preferred_contact === "phone" ? "Phone call" : "Email"} />
         {s.access_instructions && <Row k="Entry instructions" v="Provided (private)" />}
+        {s.parking_instructions && <Row k="Parking" v="Provided (private)" />}
+        {s.photos.length > 0 && <Row k="Photos" v={`${s.photos.length} attached`} />}
       </Section>
       <div className="rounded-[var(--radius-card)] border border-status-pending/40 bg-status-pending-bg/60 p-5 text-sm">
         {s.mode === "book" ? (

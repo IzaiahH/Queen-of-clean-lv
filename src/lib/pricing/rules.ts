@@ -13,10 +13,10 @@ export const FREQUENCY_LABELS: Record<Frequency, string> = {
 export const CONDITIONS = ["light", "standard", "heavy", "extreme"] as const;
 export type Condition = (typeof CONDITIONS)[number];
 export const CONDITION_LABELS: Record<Condition, string> = {
-  light: "Well kept — cleaned regularly",
-  standard: "Average — due for a good clean",
-  heavy: "Needs extra attention — noticeable buildup",
-  extreme: "Major reset — heavy buildup or long overdue",
+  light: "Well maintained",
+  standard: "Average",
+  heavy: "Needs extra attention",
+  extreme: "Heavily soiled / requires special assessment",
 };
 
 const cents = z.number().int().min(0).max(1_000_000);
