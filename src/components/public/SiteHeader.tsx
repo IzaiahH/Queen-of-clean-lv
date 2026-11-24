@@ -34,6 +34,7 @@ export function SiteHeader({ businessName, phone, logo = null }: { businessName:
   }, [open]);
 
   return (
+    <>
     <header className="on-dark sticky top-0 z-40 border-b border-gold/25 bg-obsidian/95 text-ivory backdrop-blur supports-[backdrop-filter]:bg-obsidian/85">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded focus:bg-ivory focus:px-3 focus:py-2 focus:text-obsidian">
         Skip to content
@@ -59,8 +60,11 @@ export function SiteHeader({ businessName, phone, logo = null }: { businessName:
           </button>
         </div>
       </div>
+    </header>
+      {/* Rendered outside <header>: its backdrop-blur makes it the containing block for fixed
+          children, which squeezed this full-screen menu into the header's 64px height. */}
       {open && (
-        <div id="mobile-menu" className="fixed inset-x-0 bottom-0 top-16 z-40 overflow-y-auto bg-obsidian px-6 pb-10 pt-6 lg:hidden">
+        <div id="mobile-menu" className="on-dark fixed inset-x-0 bottom-0 top-16 z-40 sm:top-[4.5rem] overflow-y-auto bg-obsidian px-6 pb-10 pt-6 lg:hidden">
           <nav aria-label="Mobile" className="flex flex-col">
             {NAV.map((n) => (
               <Link key={n.href} href={n.href} className="border-b border-gold/15 py-4 font-display text-2xl text-ivory hover:text-champagne">
@@ -83,6 +87,6 @@ export function SiteHeader({ businessName, phone, logo = null }: { businessName:
           </div>
         </div>
       )}
-    </header>
+    </>
   );
 }
