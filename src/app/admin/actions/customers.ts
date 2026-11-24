@@ -7,6 +7,7 @@ import {
   createCustomer, deleteProperty, findDuplicates, mergeCustomers, saveProperty, updateCustomer,
   type CustomerInput, type PropertyEdit,
 } from "@/lib/server/customers";
+import { retireCustomerRate, setCustomerRate, type rateInput } from "@/lib/server/customer-rates";
 import { guard } from "./guard";
 
 const uuid = z.string().uuid();
@@ -48,7 +49,10 @@ export async function updateCustomerAction(id: string, input: CustomerInput) {
 
 export async function saveCustomerStatusAction(id: string, status: "active" | "inactive" | "archived" | "lead") {
   return guard("customers.edit", async (_u, actor) => {
-    await db()`update customers set status = ${z.enum(["active", "inactive", "archived", "lead"]).parse(status)} where id = ${uuid.parse(id)} and merged_into_id is null`;
+    const st = z.enum(["active", "inactive", "archived", "lead"]).parse(status);
+    await db()`update customers set status = ${st},
+                 customer_since = case when ${st} = 'active' then coalesce(customer_since, current_date) else customer_since end
+                where id = ${uuid.parse(id)} and merged_into_id is null`;
     await audit(actor, `customer.${status === "archived" ? "archive" : "status"}`, "customer", id, { status });
     return { ok: true, message: status === "archived" ? "Customer archived. Their history is kept." : "Status updated." };
   });
@@ -137,5 +141,19 @@ export async function contactToCustomerAction(id: string) {
     }, null);
     await db()`update contact_messages set status = 'handled' where id = ${id}`;
     return { ok: true, message: "Lead created from the message.", data: { id: cid } };
+  });
+}
+
+export async function setCustomerRateAction(customerId: string, input: z.input<typeof rateInput>) {
+  return guard("customers.rates", async (_u, actor) => {
+    await setCustomerRate(actor, uuid.parse(customerId), input);
+    return { ok: true, message: "Rate saved. Any previous rate for this service and frequency was kept in the history." };
+  });
+}
+
+export async function retireCustomerRateAction(customerId: string, rateId: string) {
+  return guard("customers.rates", async (_u, actor) => {
+    const done = await retireCustomerRate(actor, uuid.parse(customerId), uuid.parse(rateId));
+    return done ? { ok: true, message: "Rate retired. It stays in the history." } : { ok: false, error: "That rate was already retired." };
   });
 }

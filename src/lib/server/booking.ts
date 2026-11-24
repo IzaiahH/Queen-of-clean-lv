@@ -4,7 +4,8 @@ import { db, type Tx } from "@/lib/db";
 import { checkSlot } from "@/lib/scheduling/availability";
 import { formatCents } from "@/lib/money";
 import { FREQUENCY_LABELS } from "@/lib/pricing/rules";
-import type { BookingRequest } from "@/lib/validation/booking";
+import { MOVE_TYPE_LABELS, type BookingRequest } from "@/lib/validation/booking";
+import { attachPropertyPhotos } from "./images";
 import { CUSTOMER_ACTOR, audit } from "./audit";
 import { appUrl, sendTemplatedEmail, type SendResult } from "./email";
 import { insertQuote, priceFromProperty } from "./quotes";
@@ -44,7 +45,7 @@ async function matchOrCreateCustomer(tx: Tx, c: BookingRequest["contact"], statu
   return { id: row.id, returning: false, created: true };
 }
 
-async function matchOrCreateProperty(tx: Tx, customerId: string, p: BookingRequest["property"], areaId: string | null, accessInstructions: string) {
+async function matchOrCreateProperty(tx: Tx, customerId: string, p: BookingRequest["property"], areaId: string | null, accessInstructions: string, parkingInstructions: string) {
   const [existing] = await tx<{ id: string }[]>`
     select id from properties
      where customer_id = ${customerId}
@@ -56,10 +57,10 @@ async function matchOrCreateProperty(tx: Tx, customerId: string, p: BookingReque
   const [{ count }] = await tx<{ count: number }[]>`select count(*)::int as count from properties where customer_id = ${customerId}`;
   const [row] = await tx<{ id: string }[]>`
     insert into properties (customer_id, address_line1, unit, city, zip, service_area_id, property_type, bedrooms, full_baths, half_baths,
-                            sqft, pets, condition, access_instructions, special_requirements, is_primary)
+                            sqft, pets, condition, access_instructions, parking_instructions, flooring, special_requirements, is_primary)
     values (${customerId}, ${p.address_line1}, ${p.unit || null}, ${p.city}, ${p.zip}, ${areaId}, ${p.property_type}, ${p.bedrooms},
             ${p.full_baths}, ${p.half_baths}, ${p.sqft}, ${p.pets > 0 ? `${p.pets} pet(s)${p.pet_details ? `: ${p.pet_details}` : ""}` : ""},
-            ${p.condition}, ${accessInstructions}, ${p.special_requests}, ${count === 0})
+            ${p.condition}, ${accessInstructions}, ${parkingInstructions}, ${p.flooring}, ${p.special_requests}, ${count === 0})
     returning id`;
   return row.id;
 }
@@ -83,7 +84,12 @@ export async function submitBookingRequest(req: BookingRequest): Promise<Booking
   const priced = await priceFromProperty(req.property, sql);
   if ("error" in priced) return { ok: false, error: priced.error };
   const { result } = priced;
+  const moveType = priced.serviceKind === "move" ? req.property.move_type : null;
+  if (priced.serviceKind === "move" && !moveType) return { ok: false, field: "property.move_type", error: "Choose move-in or move-out cleaning." };
   const extraInputs = {
+    move_type: moveType,
+    flooring: req.property.flooring,
+    photo_count: req.photos.length,
     property_type: req.property.property_type,
     recently_cleaned: req.property.recently_cleaned,
     pet_details: req.property.pet_details,
@@ -99,7 +105,7 @@ export async function submitBookingRequest(req: BookingRequest): Promise<Booking
 
       if (req.mode === "quote_only") {
         const customer = await matchOrCreateCustomer(tx, req.contact, "lead");
-        const propertyId = await matchOrCreateProperty(tx, customer.id, req.property, priced.area?.id ?? null, req.contact.access_instructions);
+        const propertyId = await matchOrCreateProperty(tx, customer.id, req.property, priced.area?.id ?? null, req.contact.access_instructions, req.contact.parking_instructions);
         const quote = await insertQuote(tx, {
           priced,
           customerId: customer.id,
@@ -111,6 +117,7 @@ export async function submitBookingRequest(req: BookingRequest): Promise<Booking
           expirationDays: settings.booking.quote_expiration_days,
         });
         if (!result.requires_review) await tx`update quotes set sent_at = now() where id = ${quote.id}`;
+        if (req.photos.length) await attachPropertyPhotos(tx, req.photos, { quoteId: quote.id, appointmentId: null, customerId: customer.id });
         await audit(CUSTOMER_ACTOR(req.contact.full_name), "quote.requested", "quote", quote.id, {}, tx);
         return { kind: "quote" as const, quote, customer, appointment: null };
       }
@@ -122,7 +129,7 @@ export async function submitBookingRequest(req: BookingRequest): Promise<Booking
       if (!check.ok) return { kind: "slot_taken" as const, problems: check.problems };
 
       const customer = await matchOrCreateCustomer(tx, req.contact, "lead");
-      const propertyId = await matchOrCreateProperty(tx, customer.id, req.property, priced.area?.id ?? null, req.contact.access_instructions);
+      const propertyId = await matchOrCreateProperty(tx, customer.id, req.property, priced.area?.id ?? null, req.contact.access_instructions, req.contact.parking_instructions);
       const quote = await insertQuote(tx, {
         priced,
         customerId: customer.id,
@@ -140,19 +147,22 @@ export async function submitBookingRequest(req: BookingRequest): Promise<Booking
       const reference = newReference("QC");
       const addonsSnapshot = result.lines.filter((l) => l.kind === "addon").map((l) => ({ label: l.label, quantity: l.quantity, amount_cents: l.amount_cents }));
       const prefs = [
+        moveType ? MOVE_TYPE_LABELS[moveType] : "",
         req.schedule.preferences,
         req.schedule.wants_recurring ? `Customer would like a recurring ${FREQUENCY_LABELS[req.property.frequency].toLowerCase()} schedule.` : "",
       ].filter(Boolean).join("\n");
+      const accessForVisit = [req.contact.access_instructions, req.contact.parking_instructions ? `Parking: ${req.contact.parking_instructions}` : ""].filter(Boolean).join("\n");
       const [appt] = await tx<{ id: string }[]>`
         insert into appointments (reference, customer_id, property_id, service_slug, quote_id, starts_at, ends_at, status, source, frequency,
                                   agreed_price_cents, estimated_minutes, addons, customer_notes, access_instructions, scheduling_preferences,
                                   manage_token_hash, idempotency_key, payment_status, needs_attention)
         values (${reference}, ${customer.id}, ${propertyId}, ${req.property.service}, ${quote.id}, ${start.toJSDate()}, ${end.toJSDate()},
                 ${autoConfirm ? "confirmed" : "pending"}, 'website', ${req.property.frequency}, ${result.total_cents}, ${result.estimated_minutes},
-                ${tx.json(addonsSnapshot as never)}, ${req.contact.notes}, ${req.contact.access_instructions}, ${prefs},
+                ${tx.json(addonsSnapshot as never)}, ${req.contact.notes}, ${accessForVisit}, ${prefs},
                 ${sha256(manageToken)}, ${req.idempotency_key}, 'unpaid', ${result.requires_review ? result.review_reasons.join(" ") : null})
         returning id`;
       await tx`insert into appointment_assignments (appointment_id, cleaner_id) values (${appt.id}, ${check.cleaner_ids[0]})`;
+      if (req.photos.length) await attachPropertyPhotos(tx, req.photos, { quoteId: quote.id, appointmentId: appt.id, customerId: customer.id });
       if (autoConfirm) await tx`update customers set status = 'active', customer_since = coalesce(customer_since, current_date) where id = ${customer.id}`;
       await recordChange(tx, appt.id, "created", CUSTOMER_ACTOR(req.contact.full_name), null, { status: autoConfirm ? "confirmed" : "pending", starts_at: start.toISO() },
         autoConfirm ? "Requested online and confirmed automatically" : "Requested online");

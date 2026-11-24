@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/admin/AdminShell";
 import { EMPTY_PROPERTY, EditCustomerButton, PropertyButton, type PropertyFormValue } from "@/components/admin/CustomerForms";
 import { BookFromProfile, CustomerStatusButtons, DeletePaymentButton, MergeButton, RecordPaymentButton } from "@/components/admin/CustomerWidgets";
 import { Stat } from "@/components/admin/Stat";
+import { CustomerRates, VerifyStatusBanner } from "@/components/admin/CustomerRates";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { can } from "@/lib/auth/permissions";
 import { requirePage } from "@/lib/auth/session";
@@ -38,7 +39,9 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
     id: p.c.id, full_name: p.c.full_name, email: p.c.email, phone: p.c.phone,
     properties: p.properties.map((x) => ({ id: x.id, label: x.label, address: [x.address_line1, x.unit, x.city].filter(Boolean).join(", "), has_address: Boolean(x.address_line1) })),
     last_price: p.appointments[0]?.agreed_price_cents ?? null, last_minutes: null,
+    rates: p.rates.filter((r) => r.status === "active").map((r) => ({ service_slug: r.service_slug, frequency: r.frequency, price_cents: r.price_cents, kind: r.kind })),
   };
+  const rateDates = Object.fromEntries(p.rates.map((r) => [r.id, formatDate(r.retired_at ?? r.created_at, tz)]));
   const propValue = (x: (typeof p.properties)[number]): PropertyFormValue => ({
     label: x.label, address_line1: x.address_line1 ?? "", unit: x.unit ?? "", city: x.city ?? "", state: x.state ?? "NV", zip: x.zip ?? "", property_type: x.property_type ?? "house",
     bedrooms: s(x.bedrooms), full_baths: s(x.full_baths), half_baths: s(x.half_baths), sqft: s(x.sqft), pets: x.pets ?? "", condition: x.condition ?? "",
@@ -51,7 +54,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
         actions={canEdit ? <>
           <BookFromProfile customer={hit} tz={tz} services={opts.services} cleaners={opts.cleaners} />
           {can(user.role, "quotes.edit") && <Link href={`/admin/quotes/new?customer=${p.c.id}`} className="btn btn-outline btn-sm">New quote</Link>}
-          <EditCustomerButton id={p.c.id} initial={{ full_name: p.c.full_name, email: p.c.email ?? "", phone: p.c.phone ?? "", preferred_contact: p.c.preferred_contact as "email", status: p.c.status as "active", preferences: p.c.preferences, private_notes: p.c.private_notes, marketing_consent: p.c.marketing_consent }} />
+          <EditCustomerButton id={p.c.id} initial={{ full_name: p.c.full_name, email: p.c.email ?? "", phone: p.c.phone ?? "", preferred_contact: p.c.preferred_contact as "email", status: p.c.status as "active" | "unverified", preferences: p.c.preferences, private_notes: p.c.private_notes, marketing_consent: p.c.marketing_consent }} />
           {can(user.role, "customers.merge") && <MergeButton keepId={p.c.id} keepName={p.c.full_name} suggestions={p.duplicates} />}
           <CustomerStatusButtons id={p.c.id} status={p.c.status} />
         </> : undefined}>
@@ -59,10 +62,13 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           <StatusBadge status={p.c.status} />
           {p.c.phone && <a href={`tel:${p.c.phone}`} className="inline-flex items-center gap-1 hover:text-gold-ink"><Phone className="size-4" aria-hidden />{p.c.phone}</a>}
           {p.c.email && <a href={`mailto:${p.c.email}`} className="inline-flex items-center gap-1 hover:text-gold-ink"><Mail className="size-4" aria-hidden />{p.c.email}</a>}
-          <span className="text-muted">Prefers {p.c.preferred_contact === "text" ? "text" : p.c.preferred_contact === "phone" ? "a call" : "email"}</span>
+          {(p.c.email || p.c.phone) && <span className="text-muted">Prefers {p.c.preferred_contact === "text" ? "text" : p.c.preferred_contact === "phone" ? "a call" : "email"}</span>}
+          {!p.c.email && !p.c.phone && <span className="font-semibold text-status-pending">No contact details yet</span>}
           {p.c.customer_since && <span className="text-muted">Customer since {formatDate(new Date(`${p.c.customer_since}T12:00:00Z`), tz)}</span>}
         </div>
       </PageHeader>
+
+      {p.c.status === "unverified" && <VerifyStatusBanner customerId={p.c.id} canEdit={canEdit} />}
 
       {p.duplicates.length > 0 && (
         <div className="rounded-[var(--radius-control)] border border-status-pending/40 bg-status-pending-bg p-3 text-sm text-status-pending">
@@ -82,6 +88,14 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
 
       <div className="grid gap-6 xl:grid-cols-[1fr_1.2fr]">
         <div className="space-y-6">
+          <CustomerRates
+            customerId={p.c.id}
+            rates={p.rates.map((r) => ({ ...r, created_at: new Date(r.created_at).toISOString(), retired_at: r.retired_at ? new Date(r.retired_at).toISOString() : null }))}
+            services={opts.services.map((x) => ({ slug: x.slug, name: x.name }))}
+            canEdit={can(user.role, "customers.rates")}
+            fmtDate={rateDates}
+          />
+
           <section className="card p-5">
             <div className="flex items-center justify-between gap-2"><h2 className="text-2xl font-semibold">Properties</h2>{canEdit && <PropertyButton customerId={p.c.id} propertyId={null} initial={{ ...EMPTY_PROPERTY, is_primary: p.properties.length === 0 }} label="Add property" />}</div>
             {p.properties.length === 0 ? <p className="mt-2 text-sm text-muted">No property yet. Add one to book a cleaning.</p> : (
@@ -104,9 +118,11 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
             )}
           </section>
 
+
           <section className="card p-5">
             <h2 className="text-2xl font-semibold">Preferences & notes</h2>
             <dl className="mt-3 space-y-3 text-sm">
+              {p.c.preferred_frequency && <div><dt className="font-semibold">Preferred frequency</dt><dd className="text-muted">{p.c.preferred_frequency === "one_time" ? "One time" : frequencyLabel(p.c.preferred_frequency as "weekly")}</dd></div>}
               <div><dt className="font-semibold">Preferences</dt><dd className="whitespace-pre-wrap text-muted">{p.c.preferences || "—"}</dd></div>
               <div><dt className="font-semibold">Private notes (staff only)</dt><dd className="whitespace-pre-wrap text-muted">{p.c.private_notes || "—"}</dd></div>
               <div><dt className="font-semibold">Marketing emails</dt><dd className="text-muted">{p.c.marketing_consent ? "Agreed" : "Not agreed"}</dd></div>

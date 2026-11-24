@@ -2,6 +2,7 @@ import { DateTime } from "luxon";
 import { Download } from "lucide-react";
 import { PageHeader } from "@/components/admin/AdminShell";
 import { ImportWizard } from "@/components/admin/ImportWizard";
+import { ExistingCustomersImport } from "@/components/admin/ExistingCustomersImport";
 import { can } from "@/lib/auth/permissions";
 import { requirePage } from "@/lib/auth/session";
 import { recentImports } from "@/lib/server/importer";
@@ -25,6 +26,7 @@ export default async function ImportExportPage() {
           <h2 className="text-2xl font-semibold">Import customers</h2>
           <p className="text-sm text-muted">Bring in your existing customer list from Excel or Google Sheets. You&apos;ll match columns, review every row, and confirm before anything is saved. Imported customer data stays private to signed-in staff.</p>
           <ImportWizard />
+          <ExistingCustomersImport />
         </section>
         <aside className="space-y-6">
           {can(user.role, "data.export") && (
@@ -43,7 +45,7 @@ export default async function ImportExportPage() {
             <h2 className="text-2xl font-semibold">Recent imports</h2>
             {imports.length === 0 ? <p className="mt-2 text-sm text-muted">None yet.</p> : (
               <ul className="mt-2 divide-y divide-line text-sm">{imports.map((i) => (
-                <li key={i.id} className="py-2"><span className="font-semibold">{i.filename}</span><span className="block text-xs text-muted">{formatDateTime(i.created_at, tz)} · {i.status === "committed" ? `${i.summary.created ?? 0} imported` : i.status === "review" ? "Not finished" : "Discarded"}</span></li>
+                <li key={i.id} className="py-2"><span className="font-semibold">{i.filename}</span><span className="block text-xs text-muted">{formatDateTime(i.created_at, tz)} · {i.status === "committed" ? `${i.summary.created ?? 0} imported${i.summary.conflict ? ` · ${i.summary.conflict} conflicts` : ""}` : i.status === "review" ? "Not finished" : "Discarded"}</span></li>
               ))}</ul>
             )}
           </section>

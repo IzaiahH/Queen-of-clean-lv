@@ -1,0 +1,8 @@
+{
+  "source": "Example only — fictional customers",
+  "rate_basis": "per_visit",
+  "customers": [
+    { "ref": "example-01", "name": "Alex Example", "frequency": "biweekly", "rate": 210, "bedrooms": 3, "bathrooms": 2.5, "sqft": 1900, "notes": "" },
+    { "ref": "example-02", "name": "Sam Sample", "frequency": "monthly", "rate": 240, "bedrooms": 2, "bathrooms": 2, "sqft": { "min": 1100, "max": 1300 }, "notes": "" }
+  ]
+}

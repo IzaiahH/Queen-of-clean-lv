@@ -29,7 +29,7 @@ function toHtml(text: string, businessName: string): string {
   return `<!doctype html><html><body style="margin:0;background:#F7F1E5;font-family:Helvetica,Arial,sans-serif;color:#292725">
 <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px">
 <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #E4CB8B">
-<tr><td style="background:#101010;color:#C5A15B;padding:20px 28px;font-family:Georgia,serif;font-size:22px;letter-spacing:2px">${escapeHtml(businessName.toUpperCase())}</td></tr>
+<tr><td style="background:#252525;color:#C49A45;padding:20px 28px;font-family:Georgia,serif;font-size:22px;letter-spacing:2px">${escapeHtml(businessName.toUpperCase())}</td></tr>
 <tr><td style="padding:28px;font-size:15px;line-height:1.6">${body}</td></tr>
 </table></td></tr></table></body></html>`;
 }

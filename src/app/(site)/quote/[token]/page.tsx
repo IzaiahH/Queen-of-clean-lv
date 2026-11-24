@@ -25,7 +25,7 @@ export default async function PublicQuotePage({ params }: { params: Promise<{ to
       {q.status === "draft" ? (
         <p className="card mt-6 p-6">We&apos;re reviewing your details and will email your confirmed quote soon.</p>
       ) : (
-        <div className="frame mt-6 rounded-sm bg-[#fffdf8]">
+        <div className="frame mt-6 rounded-sm bg-paper">
           <div className="on-dark flex items-start justify-between gap-4 bg-obsidian px-6 py-6 text-ivory">
             <div>
               <p className="text-sm text-ivory/70">{q.service_name} · {FREQUENCY_LABELS[q.frequency as Frequency] ?? q.frequency}</p>

@@ -30,7 +30,8 @@ function keepInstanceAlive() {
 
 export function createSql(url: string): Sql {
   return postgres(url, {
-    // Supabase's transaction pooler (port 6543) does not support prepared statements.
+    // Production uses Supabase's session pooler (port 5432; see README). Prepared statements stay off so
+    // the app also works through a transaction-mode pooler if one is ever used.
     prepare: false,
     max: Number(process.env.DATABASE_POOL_MAX ?? 5),
     idle_timeout: IDLE_SECONDS,

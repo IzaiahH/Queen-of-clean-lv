@@ -11,7 +11,13 @@ import { centsToInput, formatCents, parseMoneyToCents } from "@/lib/money";
 import type { CleanerOption } from "./AppointmentPanel";
 
 export type ServiceOption = { slug: string; name: string; default_minutes: number };
-type CustomerHit = { id: string; full_name: string; email: string | null; phone: string | null; properties: { id: string; label: string; address: string | null; has_address: boolean }[]; last_price: number | null; last_minutes: number | null };
+export type RateOption = { service_slug: string; frequency: string; price_cents: number; kind: "historical" | "custom" };
+type CustomerHit = { id: string; full_name: string; email: string | null; phone: string | null; properties: { id: string; label: string; address: string | null; has_address: boolean }[]; last_price: number | null; last_minutes: number | null; rates?: RateOption[] };
+
+const RATE_FREQ_LABEL: Record<string, string> = { weekly: "Weekly", biweekly: "Every 2 weeks", monthly: "Monthly", quarterly: "Every 3 months", one_time: "One time" };
+/** The customer's own rate for this service and frequency, if they have one. Never another customer's. */
+const rateFor = (c: CustomerHit | null, service: string, freq: string) =>
+  c?.rates?.find((r) => r.service_slug === service && r.frequency === (freq === "" ? "one_time" : freq)) ?? null;
 
 const FREQS = [
   { v: "", l: "One time" },
@@ -79,8 +85,27 @@ export function NewAppointmentDialog({ open, onClose, tz, services, cleaners, in
     setCust(c);
     setHits([]);
     setPropertyId(c.properties[0]?.id ?? "");
-    if (c.last_price && !quote) setPrice(centsToInput(c.last_price));
+    if (!quote) {
+      // A single rate on file is the agreed price for this customer; otherwise fall back to the last visit's price.
+      const only = c.rates?.length === 1 ? c.rates[0] : null;
+      if (only) setPrice(centsToInput(only.price_cents));
+      else if (c.last_price) setPrice(centsToInput(c.last_price));
+    }
     if (c.last_minutes && !quote) setMinutes(c.last_minutes);
+  }
+
+  /** Applies a rate on file: its service, how often, and its exact price. */
+  function applyRate(r: RateOption) {
+    if (services.some((x) => x.slug === r.service_slug)) setService(r.service_slug);
+    setFreq(r.frequency === "one_time" ? "" : r.frequency);
+    setPrice(centsToInput(r.price_cents));
+  }
+
+  /** Keeps the price on the customer's own rate when staff change service or frequency, if one matches. */
+  function syncRate(nextService: string, nextFreq: string) {
+    if (quote) return;
+    const r = rateFor(cust, nextService, nextFreq);
+    if (r) setPrice(centsToInput(r.price_cents));
   }
 
   function submit(e: React.FormEvent) {
@@ -138,11 +163,24 @@ export function NewAppointmentDialog({ open, onClose, tz, services, cleaners, in
                 {cust.properties.map((p) => <option key={p.id} value={p.id}>{p.label}{p.address ? ` · ${p.address}` : ""}</option>)}
               </select>
               {prop && !prop.has_address && <p className="field-hint text-status-pending">This property has no street address yet. Add it on the customer profile before the visit.</p>}
+              {cust.rates && cust.rates.length > 0 && !quote && (
+                <div className="mt-3 rounded-[var(--radius-control)] border border-gold/40 bg-cream/60 p-3 text-sm">
+                  <p className="font-semibold">Rates on file for {cust.full_name}</p>
+                  <ul className="mt-1 space-y-1">
+                    {cust.rates.map((r) => (
+                      <li key={`${r.service_slug}-${r.frequency}`} className="flex flex-wrap items-center justify-between gap-2">
+                        <span>{RATE_FREQ_LABEL[r.frequency] ?? r.frequency} · <strong>{formatCents(r.price_cents)}</strong> per visit <span className="text-xs text-muted">({r.kind === "historical" ? "historical rate" : "custom rate"}{services.find((x) => x.slug === r.service_slug) ? `, ${services.find((x) => x.slug === r.service_slug)!.name}` : ""})</span></span>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => applyRate(r)}>Use this rate</button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
           <div>
             <label className="field-label" htmlFor="na-svc">Service</label>
-            <select id="na-svc" className="input" value={service} onChange={(e) => { setService(e.target.value); const s = services.find((x) => x.slug === e.target.value); if (s && !cust?.last_minutes) setMinutes(s.default_minutes); }}>
+            <select id="na-svc" className="input" value={service} onChange={(e) => { setService(e.target.value); syncRate(e.target.value, freq); const s = services.find((x) => x.slug === e.target.value); if (s && !cust?.last_minutes) setMinutes(s.default_minutes); }}>
               {services.map((s) => <option key={s.slug} value={s.slug}>{s.name}</option>)}
             </select>
           </div>
@@ -157,7 +195,14 @@ export function NewAppointmentDialog({ open, onClose, tz, services, cleaners, in
           <div>
             <label className="field-label" htmlFor="na-price">Price per visit</label>
             <input id="na-price" inputMode="decimal" className="input" placeholder="0.00" value={price} onChange={(e) => setPrice(e.target.value)} />
-            {cust?.last_price ? <p className="field-hint">Last visit: {formatCents(cust.last_price)}</p> : null}
+            {(() => {
+              const r = rateFor(cust, service, freq);
+              if (r && !quote) {
+                const differs = parseMoneyToCents(price) !== r.price_cents;
+                return <p className={`field-hint ${differs ? "text-status-pending" : "text-gold-ink"}`}>{r.kind === "historical" ? "Historical" : "Custom"} rate for this customer: {formatCents(r.price_cents)}{differs ? ". The price entered is different." : ""}</p>;
+              }
+              return cust?.last_price ? <p className="field-hint">Last visit: {formatCents(cust.last_price)}</p> : null;
+            })()}
           </div>
           <fieldset className="sm:col-span-2">
             <legend className="field-label">Cleaners</legend>
@@ -174,7 +219,7 @@ export function NewAppointmentDialog({ open, onClose, tz, services, cleaners, in
           </fieldset>
           <div>
             <label className="field-label" htmlFor="na-freq">Repeats</label>
-            <select id="na-freq" className="input" value={freq} onChange={(e) => setFreq(e.target.value)}>
+            <select id="na-freq" className="input" value={freq} onChange={(e) => { setFreq(e.target.value); syncRate(service, e.target.value); }}>
               {FREQS.map((f) => <option key={f.v} value={f.v}>{f.l}</option>)}
             </select>
             {freq === "custom" && (

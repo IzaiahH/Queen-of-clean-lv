@@ -18,7 +18,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-4 sm:bottom-6 sm:items-end sm:px-6" aria-live="polite" role="status">
         {toasts.map((t) => (
-          <div key={t.id} className={`pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-[var(--radius-card)] border bg-[#fffdf8] p-4 shadow-[var(--shadow-lift)] ${t.kind === "error" ? "border-danger/40" : t.kind === "success" ? "border-success/40" : "border-line"}`}>
+          <div key={t.id} className={`pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-[var(--radius-card)] border bg-paper p-4 shadow-[var(--shadow-lift)] ${t.kind === "error" ? "border-danger/40" : t.kind === "success" ? "border-success/40" : "border-line"}`}>
             {t.kind === "success" ? <CheckCircle2 className="size-5 shrink-0 text-success" aria-hidden /> : t.kind === "error" ? <AlertTriangle className="size-5 shrink-0 text-danger" aria-hidden /> : <Info className="size-5 shrink-0 text-gold" aria-hidden />}
             <div className="flex-1 text-sm">
               <p className="font-semibold">{t.text}</p>

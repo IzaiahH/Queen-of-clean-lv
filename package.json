@@ -14,7 +14,8 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:seed:demo": "tsx scripts/seed-demo.ts",
-    "admin:create": "tsx scripts/create-admin.ts"
+    "admin:create": "tsx scripts/create-admin.ts",
+    "import:existing": "tsx scripts/import-existing-customers.ts"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.21",
@@ -30,12 +31,13 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.55.0",
     "luxon": "^3.7.2",
-    "next": "16.4.0",
+    "next": "16.4.6",
     "postgres": "^3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "read-excel-file": "^9.3.12",
     "server-only": "^0.0.1",
+    "sharp": "0.35.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -46,7 +48,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.4.0",
+    "eslint-config-next": "16.4.6",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5",

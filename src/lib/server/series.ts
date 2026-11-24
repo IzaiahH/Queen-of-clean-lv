@@ -146,7 +146,7 @@ export async function createSeries(actor: Actor, input: SeriesInput, firstAppoin
                where id = ${firstAppointmentId} and series_id is null`;
     }
     const r = await generateOccurrences(tx, row.id, { actor });
-    await tx`update customers set status = 'active', customer_since = coalesce(customer_since, current_date) where id = ${input.customer_id} and status in ('lead','inactive')`;
+    await tx`update customers set status = 'active', customer_since = coalesce(customer_since, current_date) where id = ${input.customer_id} and status in ('lead','inactive','unverified')`;
     await audit(actor, "series.create", "recurring_series", row.id, { ...r }, tx);
     return {
       ok: true as const,

@@ -15,6 +15,19 @@ export const settingsSchemas = {
     strengths: z.array(z.object({ title: z.string().max(60), body: z.string().max(300) })).max(8),
     faqs: z.array(z.object({ q: z.string().max(200), a: z.string().max(1200) })).max(20),
     logo_data_url: z.string().max(400_000).nullable(),
+    hero_headline: z.string().max(120),
+    hero_subtext: z.string().max(400),
+    /** Optional hero photograph: an https URL or a site path such as /images/hero.jpg. Empty = logo presentation. */
+    hero_image_url: z
+      .string()
+      .max(500)
+      .refine((v) => v === "" || /^https:\/\/\S+$/.test(v) || /^\/[\w\-./]+$/.test(v), "Use an https:// address or a path starting with /"),
+    hero_image_alt: z.string().max(200),
+    /** "What makes us different" — process-based promises the owner can stand behind. */
+    differentiators: z.array(z.object({ title: z.string().max(60), body: z.string().max(300) })).max(8),
+    /** Communities listed on the site. Booking eligibility is decided by ZIP codes in Service Areas, not this list. */
+    communities: z.array(z.string().min(1).max(40)).max(40),
+    social_links: z.array(z.object({ label: z.string().min(1).max(30), url: z.string().url().max(300) })).max(8),
   }),
   booking: z.object({
     timezone: z.string().min(1),
@@ -71,7 +84,7 @@ const weekdays = { open: "08:00", close: "17:00" };
 export const DEFAULT_SETTINGS: Settings = {
   business: {
     name: "Queen of Clean LV",
-    tagline: "Luxury home cleaning in Las Vegas",
+    tagline: "Crowned in Cleanliness. Trusted in Care.",
     description:
       "Queen of Clean LV is a residential cleaning business serving Las Vegas homes. We focus on consistent recurring care, thorough resets, and careful attention to detail.",
     phone: "",
@@ -92,6 +105,22 @@ export const DEFAULT_SETTINGS: Settings = {
       { q: "How do I cancel or reschedule?", a: "Use the link in your confirmation email, or contact us directly. Please give as much notice as possible." },
     ],
     logo_data_url: null,
+    hero_headline: "A Cleaner Home. A More Beautiful Life.",
+    hero_subtext:
+      "Experience exceptional home cleaning with the care, attention, and detail your home deserves. Queen of Clean LV brings a new standard of cleanliness to homes throughout Las Vegas.",
+    hero_image_url: "",
+    hero_image_alt: "",
+    differentiators: [
+      { title: "A plan for your home", body: "Your preferences, priorities, pets and access notes are saved to your home's profile, so every visit starts from what you've told us." },
+      { title: "Estimates you can read", body: "Every quote shows the base service, size adjustments, discounts and extras line by line before you book." },
+      { title: "Real availability", body: "You choose from times that are actually open on our calendar, and we confirm every request personally." },
+      { title: "Room-by-room checklist", body: "Each visit follows a written checklist, so the standard stays the same from one clean to the next." },
+    ],
+    communities: [
+      "Las Vegas", "Henderson", "North Las Vegas", "Summerlin", "Spring Valley", "Enterprise", "Paradise",
+      "Centennial Hills", "Mountains Edge", "Southern Highlands", "Green Valley", "Anthem",
+    ],
+    social_links: [],
   },
   booking: {
     timezone: "America/Los_Angeles",

@@ -42,3 +42,7 @@ yarn-error.log*
 next-env.d.ts
 test-results/
 playwright-report/
+
+# Real customer records and import reports. This repository is public: never commit them.
+/private/
+*.report-*.txt

@@ -5,7 +5,7 @@ import { getSettings } from "@/lib/server/settings";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Get your quote", description: "Get an instant cleaning estimate and request an appointment online." };
 
-export default async function QuotePage({ searchParams }: { searchParams: Promise<{ service?: string; intent?: string }> }) {
+export default async function QuotePage({ searchParams }: { searchParams: Promise<{ service?: string; intent?: string; frequency?: string }> }) {
   const sp = await searchParams;
   const [services, addons, pricing, settings] = await Promise.all([listServices(undefined, true), listAddons(undefined, true), getPublishedPricing(), getSettings()]);
   const catalog: WizardCatalog = {
@@ -25,12 +25,12 @@ export default async function QuotePage({ searchParams }: { searchParams: Promis
   };
   return (
     <div className="bg-ivory">
-      <div className="on-dark bg-obsidian px-4 pb-10 pt-8 text-center text-ivory sm:pb-14 sm:pt-12">
-        <p className="eyebrow">Instant estimate</p>
+      <div className="border-b border-line bg-paper px-4 pb-8 pt-8 text-center sm:pb-12 sm:pt-12">
+        <p className="eyebrow">Free estimate</p>
         <h1 className="mt-2 text-3xl font-semibold sm:text-5xl">Get your cleaning quote</h1>
-        <p className="mx-auto mt-2 max-w-lg text-sm text-ivory/70">About two minutes. Nothing is booked until our team confirms.</p>
+        <p className="mx-auto mt-2 max-w-lg text-sm text-muted">About two minutes. Nothing is booked until our team confirms.</p>
       </div>
-      <QuoteWizard catalog={catalog} initialService={sp.service ?? null} />
+      <QuoteWizard catalog={catalog} initialService={sp.service ?? null} initialFrequency={sp.frequency ?? null} />
     </div>
   );
 }

@@ -86,7 +86,7 @@ export async function confirmAppointment(id: string, actor: Actor, notify = true
     if (!a) return { ok: false as const, error: "Appointment not found" };
     if (!allowed.confirm.includes(a.status)) return { ok: false as const, error: `A ${a.status} appointment can't be confirmed` };
     await tx`update appointments set status = 'confirmed', needs_attention = null where id = ${id}`;
-    await tx`update customers set status = 'active', customer_since = coalesce(customer_since, current_date) where id = ${a.customer_id} and status in ('lead','inactive')`;
+    await tx`update customers set status = 'active', customer_since = coalesce(customer_since, current_date) where id = ${a.customer_id} and status in ('lead','inactive','unverified')`;
     if (a.quote_id) await tx`update quotes set status = 'accepted', accepted_at = coalesce(accepted_at, now()) where id = ${a.quote_id} and status in ('draft','sent','pending_customer')`;
     await recordChange(tx, id, "status", actor, { status: a.status }, { status: "confirmed" });
     await audit(actor, "appointment.confirm", "appointment", id, {}, tx);
@@ -296,7 +296,7 @@ export async function completeAppointment(id: string, actor: Actor, input: Compl
                values (${id}, ${l.cleaner_id}, ${l.clock_in}, ${l.clock_out}, ${l.minutes}, ${pay.pay_cents}, ${pay.basis})`;
     }
     if (!wasCompleted) {
-      await tx`update customers set status = 'active', customer_since = coalesce(customer_since, current_date) where id = ${a.customer_id} and status in ('lead','inactive')`;
+      await tx`update customers set status = 'active', customer_since = coalesce(customer_since, current_date) where id = ${a.customer_id} and status in ('lead','inactive','unverified')`;
     }
     await recordChange(tx, id, wasCompleted ? "completion_edit" : "status", actor, { status: a.status }, { status: "completed", revenue_cents: input.revenue_cents });
     await audit(actor, wasCompleted ? "job.update" : "job.complete", "appointment", id, { revenue_cents: input.revenue_cents }, tx);
@@ -399,7 +399,7 @@ export async function createManualAppointment(
       throw e;
     }
     if (input.status === "confirmed") {
-      await tx`update customers set status = 'active', customer_since = coalesce(customer_since, current_date) where id = ${input.customer_id} and status in ('lead','inactive')`;
+      await tx`update customers set status = 'active', customer_since = coalesce(customer_since, current_date) where id = ${input.customer_id} and status in ('lead','inactive','unverified')`;
       if (input.quote_id) await tx`update quotes set status = 'accepted', accepted_at = coalesce(accepted_at, now()) where id = ${input.quote_id} and status in ('draft','sent','pending_customer')`;
     }
     await recordChange(tx, appt.id, "created", actor, null, { status: input.status, starts_at: start.toISO() }, problems.length ? `Created despite: ${problems.join("; ")}` : "Created by staff");
