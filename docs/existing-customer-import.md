@@ -22,6 +22,7 @@ The file is plain JSON (template: [`docs/examples/existing-customers.example.jso
 |---|---|
 | `source` | Where the records came from. It is saved on every imported customer. |
 | `rate_basis` | Must be `"per_visit"`. The import refuses to guess what a rate covers. |
+| `confirmed_separate` | Optional. Groups of `ref`s you've confirmed are different households even though their details are identical, e.g. `[["client-002", "client-006"]]`. Those records stop being flagged as possible duplicates; any other identical match is still flagged. They're always imported as separate customers either way. |
 
 **Fields for each customer**
 
@@ -35,6 +36,8 @@ The file is plain JSON (template: [`docs/examples/existing-customers.example.jso
 | `bathrooms` | Optional. `2.5` means 2 full + 1 half; other fractions are rejected. |
 | `sqft` | Optional. Either one number, or a range such as `{ "min": 2200, "max": 2400 }`. A range is kept as a note and the size field is left blank. |
 | `notes` | Optional. Factual notes from your records. |
+
+**Correcting a record after it has been imported:** fixing a name (or anything else) in the file does **not** change the customer already in the system. The next run reports a conflict such as `name is "…" in the system, "…" in the file`, and you make the correction on the customer's profile. Nothing is overwritten automatically.
 
 Anything not in the file stays blank: email, phone, address, ZIP, cleaner and next appointment. Fill these in on each profile once confirmed.
 

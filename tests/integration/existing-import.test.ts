@@ -179,4 +179,37 @@ describe("historical rates in pricing and booking", () => {
     expect(rates.filter((r) => r.status === "active").map((r) => r.price_cents)).toEqual([22000]);
     expect(rates.filter((r) => r.status === "retired").map((r) => r.price_cents).sort()).toEqual([19000, 21000]);
   });
+
+  it("keeps owner-confirmed look-alike households as separate customers and stops re-flagging them", async () => {
+    const twin = { frequency: "monthly", rate: 262.5, bedrooms: 5, bathrooms: 3, sqft: 3150 };
+    const base = { source: "Test records", rate_basis: "per_visit", customers: [
+      { ref: "t-10", name: "Pat Invented", ...twin },
+      { ref: "t-11", name: "Jo Pretend", ...twin },
+    ] };
+    // Without confirmation the match is flagged, but both are still imported separately.
+    expect((await preview(base)).warnings.join(" ")).toMatch(/identical home details/);
+    const r = await apply({ ...base, confirmed_separate: [["t-10", "t-11"]] });
+    expect(r.totals).toMatchObject({ created: 2, error: 0, conflict: 0 });
+    expect(r.warnings.join(" ")).not.toMatch(/identical home details/);
+    const rows = await db()<{ ref: string; id: string; price_cents: number; basis: string }[]>`
+      select c.import_ref as ref, c.id, r.price_cents, r.basis from customers c join customer_rates r on r.customer_id = c.id order by c.import_ref`;
+    expect(rows.map((x) => [x.ref, x.price_cents, x.basis])).toEqual([["t-10", 26250, "per_visit"], ["t-11", 26250, "per_visit"]]);
+    expect(new Set(rows.map((x) => x.id)).size).toBe(2);
+
+    // A third identical record that the owner hasn't confirmed is still flagged.
+    const third = { ...base, confirmed_separate: [["t-10", "t-11"]], customers: [...base.customers, { ref: "t-12", name: "Max Notreal", ...twin }] };
+    expect((await preview(third)).warnings.join(" ")).toMatch(/identical home details/);
+  });
+
+  it("a corrected name in the file is reported, never written over an existing record", async () => {
+    await apply();
+    const fixed = { ...FILE, customers: FILE.customers.map((c) => (c.ref === "t-03" ? { ...c, name: "Lee Madeup-Corrected" } : c)) };
+    const r = await apply(fixed);
+    const rec = r.records.find((x) => x.ref === "t-03")!;
+    expect(rec.outcome).toBe("conflict");
+    expect(rec.details.join(" ")).toMatch(/name is "Lee Madeup" in the system, "Lee Madeup-Corrected" in the file/);
+    const [{ full_name }] = await db()<{ full_name: string }[]>`select full_name from customers where import_ref = 't-03'`;
+    expect(full_name).toBe("Lee Madeup");
+    expect(await count("select count(*)::int as n from customers")).toBe(3);
+  });
 });

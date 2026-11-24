@@ -52,6 +52,12 @@ export const sourceFileSchema = z.object({
   source: z.string().trim().min(3).max(200),
   /** Must be "per_visit": the import refuses to guess what a rate covers. */
   rate_basis: z.literal("per_visit"),
+  /**
+   * Groups of refs the owner has confirmed are separate households even though their details are
+   * identical. Stops the "possible duplicate" warning for exactly those records; any other match
+   * is still flagged.
+   */
+  confirmed_separate: z.array(z.array(z.string().trim().min(1)).min(2)).default([]),
   customers: z.array(z.unknown()).min(1).max(500),
 });
 
@@ -151,10 +157,16 @@ export async function importExistingCustomers(
     if (r.bathrooms !== null && r.bathrooms % 1 !== 0) report.warnings.push(`${r.name}: ${r.bathrooms} bathrooms saved as ${Math.floor(r.bathrooms)} full + 1 half.`);
   }
   const sig = (r: SourceRecord) => JSON.stringify([r.frequency, r.rate, r.bedrooms, r.bathrooms, r.sqft]);
-  const bySig = new Map<string, string[]>();
-  for (const { r } of valid) bySig.set(sig(r), [...(bySig.get(sig(r)) ?? []), r.name]);
-  for (const names of bySig.values())
-    if (names.length > 1) report.warnings.push(`${names.join(" and ")} have identical home details, frequency and rate. Check they're separate households, not one client recorded twice.`);
+  const bySig = new Map<string, SourceRecord[]>();
+  for (const { r } of valid) bySig.set(sig(r), [...(bySig.get(sig(r)) ?? []), r]);
+  const confirmed = parsedFile.data.confirmed_separate.map((g) => new Set(g));
+  for (const group of bySig.values()) {
+    if (group.length < 2) continue;
+    const names = group.map((r) => r.name).join(" and ");
+    // Only silenced when one confirmed group covers every record in the match.
+    if (confirmed.some((set) => group.every((r) => set.has(r.ref)))) continue;
+    report.warnings.push(`${names} have identical home details, frequency and rate. Check they're separate households, not one client recorded twice.`);
+  }
 
   try {
     await sql.begin(async (tx) => {

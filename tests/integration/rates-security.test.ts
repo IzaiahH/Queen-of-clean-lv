@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { db, type TxSql } from "@/lib/db";
 
 /**
+ * Checks are scoped to this file's own customer so rows left by other test files can't change the
+ * counts. (The "see no rates at all" checks stay unscoped: any visible row would be a failure.)
+ *
  * Database-level protection of customer-specific rates (row-level security), independent of the app.
  * Supabase grants table access to its `anon` and `authenticated` roles by default, so this simulates
  * those grants and checks RLS alone. Everything runs in a transaction that is always rolled back.
@@ -36,9 +39,9 @@ describe("customer rates: database permissions", () => {
     await inRolledBackTx(async (tx) => {
       await tx`set local role authenticated`;
       await tx`select set_config('request.jwt.claim.sub', ${OFFICE}, true)`;
-      expect((await tx`select id from customer_rates`).length).toBe(1);
-      expect((await tx`update customer_rates set price_cents = 1`).count).toBe(0);
-      expect((await tx`delete from customer_rates`).count).toBe(0);
+      expect((await tx`select id from customer_rates where customer_id = ${CUSTOMER}`).length).toBe(1);
+      expect((await tx`update customer_rates set price_cents = 1 where customer_id = ${CUSTOMER}`).count).toBe(0);
+      expect((await tx`delete from customer_rates where customer_id = ${CUSTOMER}`).count).toBe(0);
       await expect(
         tx.savepoint((sp) => sp`insert into customer_rates (customer_id, frequency, price_cents, kind, source) values (${CUSTOMER}, 'weekly', 1, 'custom', 'admin')`),
       ).rejects.toThrow(/row-level security/);
@@ -63,7 +66,7 @@ describe("customer rates: database permissions", () => {
     await inRolledBackTx(async (tx) => {
       await tx`set local role authenticated`;
       await tx`select set_config('request.jwt.claim.sub', ${ADMIN}, true)`;
-      expect((await tx`update customer_rates set notes = 'checked'`).count).toBe(1);
+      expect((await tx`update customer_rates set notes = 'checked' where customer_id = ${CUSTOMER}`).count).toBe(1);
     });
   });
 

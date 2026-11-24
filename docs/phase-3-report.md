@@ -1,6 +1,6 @@
 # Phase 3 report: Customer import and historical pricing
 
-> **Status: ready for owner approval, pending answers to Q1–Q5 below.** Not merged, not deployed; Phase 4 not started.
+> **Status: ready for final owner approval.** Q1–Q5 were answered by the owner on 2026-11-24 (see below). Not merged, not deployed, nothing imported into production; Phase 4 not started.
 
 Date: 2026-11-23 · Branch: `phase-3-customer-import` (built on `phase-2-quote-intake`). Not merged; production untouched.
 
@@ -79,17 +79,17 @@ Verified in the database after applying:
 - Email, phone, address, city and ZIP are blank.
 - There are 0 appointments, 0 schedules and 0 payments for them.
 
-## Outstanding customer-data questions (awaiting owner)
+## Customer-data questions (answered by the owner, 2026-11-24)
 
-Status: **open**. Until these are answered, the 7 imported records and their historical rates are **frozen**: nothing re-imported, edited or deleted, and nothing sent to production. Each question is described without identifying the customer, because this repository is public. The owner's private copy of this report names each record.
+Each answer is described without identifying the customer, because this repository is public. The owner's private copy of this report names each record.
 
-| # | Question | Current handling (nothing changes until answered) |
-|---|---|---|
-| Q1 | **Rate basis.** Are all 7 historical rates **per visit**? (Assumed because they match the published per-visit starting prices.) If any rate is per month, its record must be corrected before a production import. | All 7 stored as per visit, exact amounts. |
-| Q2 | **Half bathroom.** One record gives a bathroom count ending in ".5". Is that one half bathroom? | Saved as that many full bathrooms + 1 half. |
-| Q3 | **Size range.** One record gives square footage as a range, not one number. What's the actual size? The room count is also unusually high for that size; please confirm both. | Range kept as a note; size field left blank. |
-| Q4 | **Possible duplicate.** Two records have identical home details, frequency and rate. Are they separate households, or one client recorded twice? | Both imported separately; the import report flags them. |
-| Q5 | **Name.** One record's name looks like a family name or nickname. Is there a full name to use? | Imported exactly as written. |
+| # | Question | Owner's answer | What changed |
+|---|---|---|---|
+| Q1 | **Rate basis.** Are all 7 historical rates per visit? | Yes, all 7 are per cleaning visit. | Nothing: all 7 were already stored per visit. The import still refuses any file whose `rate_basis` isn't `per_visit`. Amounts unchanged. |
+| Q2 | **Half bathroom.** Does the ".5" mean one half bathroom? | Yes: one half bathroom, as recorded. | Nothing: already saved that way. Confirmation added to that record's notes. |
+| Q3 | **Size range.** What's the actual size? | The range in the records is correct; there's no single figure. | Range kept as a note and the size field left blank, as before. The confirmed room count stands. |
+| Q4 | **Possible duplicate.** Separate households? | Yes, separate households despite identical details. | Both stay separate customers with their own rate. New `confirmed_separate` field in the records file records this, so the import stops flagging that pair (any other match is still flagged). |
+| Q5 | **Name.** Is the name correct? | It was misspelled in the source; the owner gave the correct spelling. | Corrected in the private records file. A production import will use the corrected name. Where the old spelling was already imported (local development only), the import reports a name conflict instead of overwriting; see the import guide. |
 
 Customer names and rates are deliberately not in this repository, because it is public. The owner has the full per-customer report privately.
 
@@ -97,12 +97,14 @@ Customer names and rates are deliberately not in this repository, because it is 
 
 | Suite | Result | New in this phase |
 |---|---|---|
-| Unit | 46 / 46 | 5 tests: half-bath mapping, sq-ft range, whole-cent rates, and who can change or see rates |
-| Integration (real Postgres) | 34 / 34 | 13 tests: the 9 listed below, plus 4 database-permission tests for rates |
+| Unit | 48 / 48 | 7 tests: half-bath mapping, sq-ft range, whole-cent rates, per-visit-only files, and who can change or see rates |
+| Integration (real Postgres) | 36 / 36 | 15 tests: the 11 listed below, plus 4 database-permission tests for rates |
 | Browser (phone) | 11 / 11 | 1 test, described below |
 | Typecheck, lint, build | Pass | — |
 
-The 9 new integration tests check:
+Re-run on 2026-11-24 after the owner's answers: all suites pass (Unit 48/48, Integration 36/36, Browser 11/11, typecheck and lint). The rate-permission tests now check only their own test record, so leftover rows from other test files can't affect them.
+
+The 11 new integration tests check:
 - A preview saves nothing.
 - Rates are exact to the cent (including $249.99), nothing is invented, and nothing is booked or charged.
 - Re-runs, including 3 at once, create no duplicates.
@@ -112,6 +114,8 @@ The 9 new integration tests check:
 - Website pricing is unchanged, and a new customer with an identical home gets the standard price.
 - Booking at the historical rate works for a one-off visit and for a recurring schedule, booking requires an address, and the customer becomes active.
 - There's only ever one active rate per service and frequency, with history kept.
+- Owner-confirmed look-alike households import as separate customers with their own rates and stop being flagged; an unconfirmed look-alike is still flagged.
+- A corrected name in the file is reported as a conflict, never written over the existing record.
 
 The new browser test covers, on a phone:
 - Upload, preview and apply, then a re-run showing "2 unchanged".
