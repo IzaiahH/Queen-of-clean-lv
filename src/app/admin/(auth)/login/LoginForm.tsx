@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { loginAction } from "@/app/admin/actions/auth";
 
@@ -17,6 +18,9 @@ export function LoginForm() {
       </div>
       {state?.error && <p className="field-error" role="alert">{state.error}</p>}
       <button type="submit" className="btn btn-dark w-full" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>
+      <p className="text-center text-sm">
+        <Link href="/admin/forgot-password" className="underline underline-offset-4">Forgot password?</Link>
+      </p>
     </form>
   );
 }

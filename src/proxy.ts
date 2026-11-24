@@ -6,9 +6,13 @@ import { createServerClient } from "@supabase/ssr";
  * Supabase sessions refreshed. Real authorization happens server-side in every admin page,
  * server action and API route (see src/lib/auth/session.ts).
  */
+const PUBLIC_ADMIN_PATHS = ["/admin/login", "/admin/forgot-password", "/admin/auth/confirm"];
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (pathname.startsWith("/admin/login")) return NextResponse.next();
+  // Pages that must work before signing in. /admin/reset-password is NOT listed: it needs the
+  // session created by /admin/auth/confirm, so the normal check below applies to it.
+  if (PUBLIC_ADMIN_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return NextResponse.next();
   const provider = process.env.AUTH_PROVIDER ?? (process.env.NEXT_PUBLIC_SUPABASE_URL ? "supabase" : "local");
   let response = NextResponse.next({ request });
   let hasSession = false;
