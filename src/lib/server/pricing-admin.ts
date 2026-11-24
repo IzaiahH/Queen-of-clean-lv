@@ -70,7 +70,7 @@ export async function testRules(rules: unknown, input: unknown) {
   const run = (r: PricingRules) => {
     const out = calculateQuote(r, i, names);
     if (!out.ok) return { error: out.error };
-    return { total_cents: out.total_cents, minutes: out.estimated_minutes, lines: out.lines.map((l) => ({ label: l.label, amount_cents: l.amount_cents })), review: out.review_reasons, mode: out.mode };
+    return { total_cents: out.total_cents, minutes: out.estimated_minutes, first_visit_cents: out.first_visit_cents, lines: out.lines.map((l) => ({ label: l.label, amount_cents: l.amount_cents })), review: out.review_reasons, mode: out.mode };
   };
   return { ok: true as const, draft: run(parsed.data), published: run(published.rules), published_version: published.version };
 }

@@ -13,7 +13,7 @@ export async function previewQuoteAction(property: PropertyInput) {
     const priced = await priceFromProperty(propertyInputSchema.parse(property));
     if ("error" in priced) return { ok: false, error: priced.error };
     const r = priced.result;
-    return { ok: true, data: { lines: r.lines.map((l) => ({ label: l.label, amount_cents: l.amount_cents })), total_cents: r.total_cents, recurring_per_visit_cents: r.recurring_per_visit_cents, estimated_minutes: r.estimated_minutes, requires_review: r.requires_review, review_reasons: r.review_reasons, notes: r.notes, mode: r.mode, version: priced.version, area: priced.area?.name ?? null, area_message: priced.areaMessage } };
+    return { ok: true, data: { lines: r.lines.map((l) => ({ label: l.label, amount_cents: l.amount_cents })), total_cents: r.total_cents, recurring_per_visit_cents: r.recurring_per_visit_cents, first_visit_cents: r.first_visit_cents, estimated_minutes: r.estimated_minutes, requires_review: r.requires_review, review_reasons: r.review_reasons, notes: r.notes, mode: r.mode, version: priced.version, area: priced.area?.name ?? null, area_message: priced.areaMessage } };
   });
 }
 

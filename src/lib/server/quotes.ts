@@ -81,7 +81,8 @@ export async function insertQuote(
     values (${newReference("Q")}, ${q.customerId}, ${q.propertyId}, ${input.service}, ${input.frequency},
             ${tx.json({ ...input, ...(q.extraInputs ?? {}), area: q.priced.area?.name ?? null } as never)}, ${q.priced.versionId},
             ${result.total_cents}, ${result.recurring_per_visit_cents}, ${result.estimated_minutes},
-            ${tx.json({ lines: result.lines, notes: result.notes, mode: result.mode, sqft_used: result.sqft_used, sqft_assumed: result.sqft_assumed, version: q.priced.version } as never)},
+            ${tx.json({ lines: result.lines, notes: result.notes, mode: result.mode, sqft_used: result.sqft_used, sqft_assumed: result.sqft_assumed, version: q.priced.version,
+                        first_visit_cents: result.first_visit_cents, first_visit_minutes: result.first_visit_minutes, matched_row: result.matched_row } as never)},
             ${result.requires_review}, ${result.review_reasons}, ${q.status}, ${q.source}, ${sha256(token)}, ${q.idempotencyKey ?? null},
             ${expires}, ${q.status === "accepted" ? new Date() : null}, ${q.createdBy ?? null})
     returning id, reference`;

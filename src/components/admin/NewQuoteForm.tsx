@@ -12,7 +12,7 @@ import { minutesLabel } from "@/lib/time";
 type Svc = { slug: string; name: string; allowed_frequencies: Frequency[] };
 type Addon = { slug: string; name: string; max_quantity: number; unit_label: string };
 type Hit = { id: string; full_name: string; email: string | null; properties: { id: string; label: string; address: string | null; has_address: boolean }[] };
-type Preview = { lines: { label: string; amount_cents: number }[]; total_cents: number; recurring_per_visit_cents: number | null; estimated_minutes: number; requires_review: boolean; review_reasons: string[]; notes: string[]; mode: string; version: number; area: string | null; area_message: string | null };
+type Preview = { lines: { label: string; amount_cents: number }[]; total_cents: number; recurring_per_visit_cents: number | null; first_visit_cents: number | null; estimated_minutes: number; requires_review: boolean; review_reasons: string[]; notes: string[]; mode: string; version: number; area: string | null; area_message: string | null };
 
 export function NewQuoteForm({ services, addons, initialCustomer }: { services: Svc[]; addons: Addon[]; initialCustomer: Hit | null }) {
   const router = useRouter();
@@ -117,7 +117,8 @@ export function NewQuoteForm({ services, addons, initialCustomer }: { services: 
         {!preview ? <p className="mt-2 text-sm text-muted">Enter a ZIP code to calculate.</p> : (
           <>
             <p className="mt-2 font-display text-4xl font-semibold text-gold-ink [font-variant-numeric:lining-nums]">{preview.mode === "custom" ? "Custom" : formatCents(preview.total_cents)}</p>
-            <p className="text-sm text-muted">{minutesLabel(preview.estimated_minutes)} · pricing v{preview.version}{preview.area ? ` · ${preview.area}` : ""}</p>
+            <p className="text-sm text-muted">{preview.recurring_per_visit_cents !== null ? "per visit · " : ""}{minutesLabel(preview.estimated_minutes)} · pricing v{preview.version}{preview.area ? ` · ${preview.area}` : ""}</p>
+            {preview.first_visit_cents !== null && <p className="text-sm font-semibold">First visit (initial clean): {formatCents(preview.first_visit_cents)}</p>}
             <table className="mt-3 w-full text-sm"><tbody>{preview.lines.map((l, i) => <tr key={i} className="border-t border-line"><td className="py-1">{l.label}</td><td className="py-1 text-right tabular-nums">{formatCents(l.amount_cents)}</td></tr>)}</tbody></table>
             {preview.area_message && <p className="mt-2 text-xs text-status-pending">{preview.area_message}</p>}
             {preview.review_reasons.length > 0 && <ul className="mt-2 list-disc pl-5 text-xs text-status-pending">{preview.review_reasons.map((r) => <li key={r}>{r}</li>)}</ul>}

@@ -5,13 +5,26 @@ import { DEFAULT_RULES, lintRules, pricingRulesSchema, type PricingRules } from 
 const names = { services: { recurring: "Recurring Home Cleaning", deep: "Queen Reset", custom: "Custom" }, addons: { "inside-oven": "Inside oven", "interior-windows": "Interior windows", baseboards: "Baseboards" } };
 const base: QuoteInput = { service: "recurring", frequency: "biweekly", bedrooms: 2, full_baths: 2, half_baths: 0, sqft: 1200, condition: "standard", pets: 0, addons: [], travel_fee_cents: 0, area_requires_review: false };
 
-function quote(over: Partial<QuoteInput> = {}, rules: PricingRules = DEFAULT_RULES) {
+/**
+ * The general engine behaviour below is tested on a rule set without a starting-price table (the
+ * single base price + per-room + size bands path), with the pre-2026-11 recurring floors.
+ */
+const LEGACY: PricingRules = (() => {
+  const r = structuredClone(DEFAULT_RULES);
+  r.services.recurring.matrix = [];
+  r.services.recurring.initial_clean = undefined;
+  r.services.recurring.frequencies = { weekly: { base_cents: 16500, minimum_cents: 16500 }, biweekly: { base_cents: 18500, minimum_cents: 18500 }, monthly: { base_cents: 21000, minimum_cents: 21000 } };
+  r.pets = { fee_cents: 0, per_extra_pet_cents: 0, minutes: 15 };
+  return r;
+})();
+
+function quote(over: Partial<QuoteInput> = {}, rules: PricingRules = LEGACY) {
   const r = calculateQuote(rules, { ...base, ...over }, names);
   if (!r.ok) throw new Error(r.error);
   return r;
 }
 
-describe("pricing engine", () => {
+describe("pricing engine (single base price, no starting-price table)", () => {
   it("default rules validate", () => {
     expect(pricingRulesSchema.safeParse(DEFAULT_RULES).success).toBe(true);
     expect(lintRules(DEFAULT_RULES)).toEqual([]);
@@ -61,7 +74,7 @@ describe("pricing engine", () => {
   });
 
   it("enforces minimum price and adds travel fees", () => {
-    const rules = structuredClone(DEFAULT_RULES);
+    const rules = structuredClone(LEGACY);
     rules.services.recurring.frequencies.biweekly = { base_cents: 10000, minimum_cents: 15000 };
     const r = quote({ travel_fee_cents: 1500 }, rules);
     expect(r.lines.find((l) => l.kind === "minimum")!.amount_cents).toBe(5000);
@@ -88,7 +101,7 @@ describe("pricing engine", () => {
   });
 
   it("applies admin adjustments scoped by service and frequency", () => {
-    const rules = structuredClone(DEFAULT_RULES);
+    const rules = structuredClone(LEGACY);
     rules.adjustments = [{ id: "weekly-10", label: "Weekly loyalty", kind: "percent", value: -10, services: ["recurring"], frequencies: ["weekly"], active: true }];
     const big = quote({ frequency: "weekly", bedrooms: 4 }, rules);
     expect(big.lines.find((l) => l.kind === "adjustment")!.amount_cents).toBe(-2050); // 10% of 16500 + 2×2000
@@ -100,14 +113,14 @@ describe("pricing engine", () => {
   });
 
   it("changing rules changes new quotes only through a new rule set", () => {
-    const v2 = structuredClone(DEFAULT_RULES);
+    const v2 = structuredClone(LEGACY);
     v2.services.recurring.frequencies.biweekly = { base_cents: 19500, minimum_cents: 19500 };
-    expect(quote({}, DEFAULT_RULES).total_cents).toBe(18500);
+    expect(quote({}, LEGACY).total_cents).toBe(18500);
     expect(quote({}, v2).total_cents).toBe(19500);
   });
 
   it("lint catches conflicting bands", () => {
-    const rules = structuredClone(DEFAULT_RULES);
+    const rules = structuredClone(LEGACY);
     rules.sqft_bands[2].up_to_sqft = 1000;
     expect(lintRules(rules).length).toBeGreaterThan(0);
   });

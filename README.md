@@ -255,11 +255,14 @@ npm start & npm run test:e2e   # Playwright on a phone viewport against the runn
 ## Defaults chosen (change any of them in Admin)
 
 - **Colors:** the owner's palette — primary gold `#C49A45`, antique gold `#98702C`, champagne `#E5D2A6`, ivory `#FAF8F3`, white, charcoal `#252525`, warm gray. Small body text uses slightly deeper gold (`#8A6526`) and gray (`#6E6A62`) so it meets WCAG AA contrast on ivory.
-- **Starting prices are a draft for the owner to review:**
-  - Weekly $165, every 2 weeks $185, monthly $210.
-  - Queen Reset (deep clean) $275.
-  - These replace the $125/$180/$200 shown on the reference image.
-  - Add-ons and size bands are also starter values. Admin → Pricing & Services shows them all, and nothing is final until the owner publishes.
+- **Recurring starting prices (owner's table, Nov 2026)**, per visit, weekly / every 2 weeks / monthly:
+  - 1 bed / 1 bath $125 / $150 / $175 · 2/2 $150 / $175 / $210 · 3/2 $175 / $200 / $250
+  - 3/3 $195 / $225 / $275 · 4/3 $225 / $260 / $310 · 4/4 $250 / $290 / $350
+  - A home between rows starts from the largest row it fully contains, plus extra rooms ($20 per bedroom, $25 per full bath, $12 per half bath) and $5 per 100 sq ft above the size that row assumes (1,000 / 1,300 / 1,800 / 2,100 / 2,600 / 3,000 sq ft). Smaller homes are never discounted below the starting price.
+  - Starter values for the owner to review: pets $10 + $5 per extra pet; condition +20% (needs extra attention) / +40% and review (heavily soiled); first visit of a recurring plan (initial clean) +50% of the cleaning price, at least $225.
+  - One-time standard, Queen Reset (deep, from $275) and move-in/out have their own prices and never use the recurring table.
+  - Customer-specific rates (Admin → customer → Rates) always win over these and are never changed by publishing new prices.
+  - Everything is in Admin → Pricing & Services, and nothing changes for customers until the owner publishes.
 - **Logo:** the owner's own artwork is used as supplied: `public/images/queen-of-clean-logo.png` (full wordmark: desktop header, hero, footer, login) and `public/images/queen-crowned-q.png` (crowned Q: mobile header, admin, favicon and phone app icon). Both have transparent backgrounds.
 - **No customers were seeded.** The customer tracker screenshot wasn't provided. Use Admin → Import / Export to bring in a spreadsheet; nothing is imported or scheduled without review.
 - **Online bookings start as "Pending review."** Auto-confirm is off; turn it on in Settings → Booking, with a price cap and a returning-customers-only option.

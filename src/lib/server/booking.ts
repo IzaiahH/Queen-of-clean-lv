@@ -122,8 +122,11 @@ export async function submitBookingRequest(req: BookingRequest): Promise<Booking
         return { kind: "quote" as const, quote, customer, appointment: null };
       }
 
+      // The booked visit is the first one: an initial clean when the service prices one.
+      const visitCents = result.first_visit_cents ?? result.total_cents;
+      const visitMinutes = result.first_visit_minutes ?? result.estimated_minutes;
       const start = DateTime.fromISO(req.schedule.slot_start!);
-      const end = start.plus({ minutes: result.estimated_minutes });
+      const end = start.plus({ minutes: visitMinutes });
       const ctx = await loadScheduleContext(tx, settings, start, end);
       const check = checkSlot(ctx, start, end, { serviceSlug: req.property.service, enforceLeadTime: true });
       if (!check.ok) return { kind: "slot_taken" as const, problems: check.problems };
@@ -142,7 +145,7 @@ export async function submitBookingRequest(req: BookingRequest): Promise<Booking
 
       const ac = settings.booking.auto_confirm;
       const autoConfirm =
-        ac.enabled && !result.requires_review && result.total_cents <= ac.max_estimate_cents && (!ac.returning_customers_only || customer.returning);
+        ac.enabled && !result.requires_review && visitCents <= ac.max_estimate_cents && (!ac.returning_customers_only || customer.returning);
       const manageToken = newToken();
       const reference = newReference("QC");
       const addonsSnapshot = result.lines.filter((l) => l.kind === "addon").map((l) => ({ label: l.label, quantity: l.quantity, amount_cents: l.amount_cents }));
@@ -157,7 +160,7 @@ export async function submitBookingRequest(req: BookingRequest): Promise<Booking
                                   agreed_price_cents, estimated_minutes, addons, customer_notes, access_instructions, scheduling_preferences,
                                   manage_token_hash, idempotency_key, payment_status, needs_attention)
         values (${reference}, ${customer.id}, ${propertyId}, ${req.property.service}, ${quote.id}, ${start.toJSDate()}, ${end.toJSDate()},
-                ${autoConfirm ? "confirmed" : "pending"}, 'website', ${req.property.frequency}, ${result.total_cents}, ${result.estimated_minutes},
+                ${autoConfirm ? "confirmed" : "pending"}, 'website', ${req.property.frequency}, ${visitCents}, ${visitMinutes},
                 ${tx.json(addonsSnapshot as never)}, ${req.contact.notes}, ${accessForVisit}, ${prefs},
                 ${sha256(manageToken)}, ${req.idempotency_key}, 'unpaid', ${result.requires_review ? result.review_reasons.join(" ") : null})
         returning id`;
@@ -175,7 +178,9 @@ export async function submitBookingRequest(req: BookingRequest): Promise<Booking
     }
 
     const firstName = req.contact.full_name.split(/\s+/)[0];
-    const estimate = result.mode === "custom" ? "Custom quote — we'll follow up" : formatCents(result.total_cents);
+    const estimate = result.mode === "custom" ? "Custom quote — we'll follow up"
+      : result.first_visit_cents !== null ? `${formatCents(result.first_visit_cents)} first visit (initial clean), then ${formatCents(result.total_cents)} per visit`
+      : formatCents(result.total_cents);
     if (out.kind === "quote") {
       const quoteUrl = appUrl(`/quote/${out.quote.token}`);
       let email: SendResult | null = null;

@@ -9,7 +9,9 @@ A short guide to running Queen of Clean LV day to day. Sign in at **yourdomain.c
    - Only list facts you can stand behind. Leave out licenses, insurance or awards unless you have them.
    - Upload your logo if you prefer it to the built-in crown.
 2. **Pricing & Services.**
-   - The starting prices (weekly $165, every 2 weeks $185, monthly $210, Queen Reset $275) are a draft for you to review.
+   - Recurring cleaning uses your **starting-price table** (bedrooms × bathrooms × weekly / every 2 weeks / monthly). If the live prices don't show the table yet, click **Start editing prices**, then **Use the new starting-price table** under Recurring.
+   - Below the table: the size charge for homes larger than typical, extra-room prices, the first-visit (initial clean) price, pets, condition and add-ons. Deep, one-time and move-in/out cleans have their own prices.
+   - Fix anything listed under "Check these before publishing" (for example an old minimum above your cheapest starting price).
    - Click **Start editing prices** and adjust the draft.
    - Try a few homes in the **Test** panel to compare against live prices, then click **Publish**.
 3. **Settings → Policies.** Read the cancellation, rescheduling, terms and privacy text, edit it, then tick **reviewed**. Until you do, the public pages say the policies are being finalized.

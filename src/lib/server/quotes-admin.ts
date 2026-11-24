@@ -34,7 +34,7 @@ export async function getQuoteDetail(id: string) {
   const [q] = await db()<{
     id: string; reference: string; status: string; service_slug: string; service_name: string; frequency: string; inputs: Record<string, unknown>;
     pricing_version_id: string; pricing_version: number; estimate_cents: number; recurring_cents: number | null; estimated_minutes: number;
-    breakdown: { lines: { kind: string; label: string; quantity: number; amount_cents: number }[]; notes: string[]; mode: string; sqft_used?: number; sqft_assumed?: boolean };
+    breakdown: { lines: { kind: string; label: string; quantity: number; amount_cents: number }[]; notes: string[]; mode: string; sqft_used?: number; sqft_assumed?: boolean; first_visit_cents?: number | null; matched_row?: { bedrooms: number; full_baths: number; typical_sqft: number } | null };
     requires_review: boolean; review_reasons: string[]; override_cents: number | null; override_reason: string | null; override_by_name: string | null; override_at: Date | null;
     source: string; expires_at: Date | null; accepted_at: Date | null; sent_at: Date | null; created_at: Date;
     customer_id: string | null; customer_name: string | null; customer_email: string | null; customer_phone: string | null;

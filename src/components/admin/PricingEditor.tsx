@@ -6,7 +6,7 @@ import { discardDraftAction, publishDraftAction, saveDraftAction, testRulesActio
 import { ConfirmButton } from "@/components/ui/ConfirmButton";
 import { useAction } from "@/components/ui/useAction";
 import { formatCents } from "@/lib/money";
-import { CONDITIONS, CONDITION_LABELS, FREQUENCIES, FREQUENCY_LABELS, type Frequency, type PricingRules } from "@/lib/pricing/rules";
+import { CONDITIONS, CONDITION_LABELS, DEFAULT_RULES, FREQUENCIES, FREQUENCY_LABELS, type Frequency, type PricingRules } from "@/lib/pricing/rules";
 import { minutesLabel } from "@/lib/time";
 
 /** Dollar input bound to an integer-cents value. Keeps the typed text while editing. */
@@ -14,7 +14,7 @@ function Money({ label, cents, onChange, className = "" }: { label: string; cent
   const [text, setText] = useState((cents / 100).toFixed(2).replace(/\.00$/, ""));
   return (
     <label className={className}>
-      <span className="field-label text-xs">{label}</span>
+      {label && <span className="field-label text-xs">{label}</span>}
       <span className="relative block"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">$</span>
         <input className="input !min-h-10 pl-6" inputMode="decimal" value={text} onChange={(e) => { setText(e.target.value); const n = Number(e.target.value.replace(/[$,]/g, "")); if (Number.isFinite(n) && n >= 0) onChange(Math.round(n * 100)); }} />
       </span>
@@ -70,7 +70,7 @@ export function PricingEditor({ initial, initialNotes, names, initialWarnings, d
         <div className="space-y-6">
           <section className="card p-5">
             <h2 className="text-2xl font-semibold">Services</h2>
-            <p className="text-sm text-muted">Base price covers the included bedrooms and bathrooms. The minimum is the lowest total for that frequency.</p>
+            <p className="text-sm text-muted">Base price covers the included bedrooms and bathrooms. The minimum is the lowest total for that frequency. A service with a starting-price table uses the table instead of the base price, and charges extra rooms beyond the matched row at the rates below.</p>
             <div className="mt-4 space-y-6">
               {[...names.services.map((x) => x.slug).filter((k) => r.services[k]), ...Object.keys(r.services).filter((k) => !names.services.some((x) => x.slug === k))].map((slug) => [slug, r.services[slug]] as const).map(([slug, s]) => (
                 <div key={slug} className="rounded-[var(--radius-control)] border border-line p-4">
@@ -104,6 +104,8 @@ export function PricingEditor({ initial, initialNotes, names, initialWarnings, d
                         <Money label="Each extra full bath" cents={s.per_extra_full_bath_cents} onChange={(c) => upd((d) => { d.services[slug].per_extra_full_bath_cents = c; })} />
                         <Money label="Each half bath" cents={s.per_half_bath_cents} onChange={(c) => upd((d) => { d.services[slug].per_half_bath_cents = c; })} />
                       </div>
+                      <MatrixEditor slug={slug} s={s} upd={upd} />
+                      <InitialCleanEditor slug={slug} s={s} upd={upd} />
                     </>
                   )}
                   <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -117,7 +119,7 @@ export function PricingEditor({ initial, initialNotes, names, initialWarnings, d
               {missingServices.map((s) => (
                 <div key={s.slug} className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-control)] border border-dashed border-line p-4 text-sm">
                   <span><strong>{s.name}</strong> has no prices in this version{s.active ? " (it's turned on, so publishing will be blocked)" : ""}.</span>
-                  <button type="button" className="btn btn-outline btn-sm" onClick={() => upd((d) => { d.services[s.slug] = { quote_mode: "custom", frequencies: { one_time: { base_cents: 0, minimum_cents: 0 } }, included_bedrooms: 0, included_full_baths: 0, per_extra_bedroom_cents: 0, per_extra_full_bath_cents: 0, per_half_bath_cents: 0, base_minutes: 180, minutes_per_extra_bedroom: 0, minutes_per_extra_full_bath: 0, minutes_per_half_bath: 0 }; })}>Add prices</button>
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => upd((d) => { d.services[s.slug] = { quote_mode: "custom", frequencies: { one_time: { base_cents: 0, minimum_cents: 0 } }, included_bedrooms: 0, included_full_baths: 0, per_extra_bedroom_cents: 0, per_extra_full_bath_cents: 0, per_half_bath_cents: 0, base_minutes: 180, minutes_per_extra_bedroom: 0, minutes_per_extra_full_bath: 0, minutes_per_half_bath: 0, matrix: [], matrix_cents_per_100_sqft_over: 0, matrix_minutes_per_100_sqft_over: 0, matrix_sqft_per_extra_bedroom: 400 }; })}>Add prices</button>
                 </div>
               ))}
             </div>
@@ -125,7 +127,7 @@ export function PricingEditor({ initial, initialNotes, names, initialWarnings, d
 
           <section className="card p-5">
             <h2 className="text-2xl font-semibold">Home size</h2>
-            <p className="text-sm text-muted">Added to the base price by square footage. When a customer doesn&apos;t know their size, it&apos;s assumed from bedrooms.</p>
+            <p className="text-sm text-muted">Added to the base price by square footage, for services without a starting-price table (one-time, deep, move). Services with a table use their own size charge. When a customer doesn&apos;t know their size, it&apos;s assumed from bedrooms.</p>
             <div className="mt-3 space-y-2">
               {r.sqft_bands.map((b, i) => (
                 <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] items-end gap-2">
@@ -222,7 +224,85 @@ export function PricingEditor({ initial, initialNotes, names, initialWarnings, d
   );
 }
 
-type TestOut = { total_cents: number; minutes: number; lines: { label: string; amount_cents: number }[]; review: string[]; mode: string } | { error: string };
+type Upd = (fn: (d: PricingRules) => void) => void;
+type Svc = PricingRules["services"][string];
+const TABLE_FREQS: Frequency[] = ["weekly", "biweekly", "monthly", "quarterly", "one_time"];
+
+/** Starting prices by home configuration (bedrooms × full baths) and frequency. */
+function MatrixEditor({ slug, s, upd }: { slug: string; s: Svc; upd: Upd }) {
+  const freqs = TABLE_FREQS.filter((f) => s.frequencies[f]);
+  const defaultTable = DEFAULT_RULES.services[slug]?.matrix ?? [];
+  if (!s.matrix.length)
+    return (
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-control)] border border-dashed border-line p-3 text-sm">
+        <span>No starting-price table: every home starts from the base price above.</span>
+        <span className="flex gap-2">
+          {defaultTable.length > 0 && <button type="button" className="btn btn-outline btn-sm" onClick={() => upd((d) => { d.services[slug].matrix = structuredClone(defaultTable); d.services[slug].matrix_cents_per_100_sqft_over = DEFAULT_RULES.services[slug].matrix_cents_per_100_sqft_over; d.services[slug].matrix_minutes_per_100_sqft_over = DEFAULT_RULES.services[slug].matrix_minutes_per_100_sqft_over; d.services[slug].matrix_sqft_per_extra_bedroom = DEFAULT_RULES.services[slug].matrix_sqft_per_extra_bedroom;
+            // The old single base prices would otherwise act as minimums above the table's smallest homes.
+            for (const f of TABLE_FREQS) { const dp = DEFAULT_RULES.services[slug].frequencies[f]; if (dp && d.services[slug].frequencies[f]) d.services[slug].frequencies[f] = { ...dp }; }
+          })}>Use the new starting-price table</button>}
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => upd((d) => { d.services[slug].matrix = [{ bedrooms: d.services[slug].included_bedrooms, full_baths: d.services[slug].included_full_baths, typical_sqft: 1300, prices: Object.fromEntries(freqs.map((f) => [f, d.services[slug].frequencies[f]!.base_cents])) }]; })}><Plus className="size-4" aria-hidden />Start a blank table</button>
+        </span>
+      </div>
+    );
+  return (
+    <div className="mt-4 rounded-[var(--radius-control)] border border-gold/50 bg-white p-3">
+      <p className="text-sm font-semibold">Starting prices by home <span className="font-normal text-muted">(per visit; a home between rows starts from the largest row it fully contains, plus extra rooms and size)</span></p>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full min-w-[36rem] text-sm">
+          <thead><tr className="text-left text-xs text-muted"><th className="pb-1 pr-2">Beds</th><th className="pb-1 pr-2">Full baths</th><th className="pb-1 pr-2">Typical sq ft</th>{freqs.map((f) => <th key={f} className="pb-1 pr-2">{FREQUENCY_LABELS[f]}</th>)}<th /></tr></thead>
+          <tbody>
+            {s.matrix.map((row, i) => (
+              <tr key={i} className="align-top">
+                <td className="pr-2 pb-2"><input aria-label="Bedrooms" className="input !min-h-10 w-16" type="number" min={0} max={20} value={row.bedrooms} onChange={(e) => upd((d) => { d.services[slug].matrix[i].bedrooms = Number(e.target.value); })} /></td>
+                <td className="pr-2 pb-2"><input aria-label="Full baths" className="input !min-h-10 w-16" type="number" min={0} max={20} value={row.full_baths} onChange={(e) => upd((d) => { d.services[slug].matrix[i].full_baths = Number(e.target.value); })} /></td>
+                <td className="pr-2 pb-2"><input aria-label="Typical square feet" className="input !min-h-10 w-24" type="number" min={100} max={50000} step={50} value={row.typical_sqft} onChange={(e) => upd((d) => { d.services[slug].matrix[i].typical_sqft = Number(e.target.value); })} /></td>
+                {freqs.map((f) => (
+                  <td key={f} className="pr-2 pb-2">
+                    {row.prices[f] !== undefined
+                      ? <Money label="" cents={row.prices[f]!} className="block w-24" onChange={(c) => upd((d) => { d.services[slug].matrix[i].prices[f] = c; })} />
+                      : <button type="button" className="btn btn-ghost btn-sm" onClick={() => upd((d) => { d.services[slug].matrix[i].prices[f] = d.services[slug].frequencies[f]!.base_cents; })}>Add</button>}
+                  </td>
+                ))}
+                <td className="pb-2"><button type="button" className="btn btn-ghost size-10 p-0" aria-label="Remove row" onClick={() => upd((d) => { d.services[slug].matrix.splice(i, 1); })}><Trash2 className="size-4" aria-hidden /></button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => upd((d) => { const last = d.services[slug].matrix.at(-1)!; d.services[slug].matrix.push({ ...structuredClone(last), bedrooms: last.bedrooms + 1 }); })}><Plus className="size-4" aria-hidden />Add row</button>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Money label="Size charge per 100 sq ft over typical" cents={s.matrix_cents_per_100_sqft_over} onChange={(c) => upd((d) => { d.services[slug].matrix_cents_per_100_sqft_over = c; })} />
+        <Num label="Extra time per 100 sq ft over" suffix="min" value={s.matrix_minutes_per_100_sqft_over} max={60} onChange={(n) => upd((d) => { d.services[slug].matrix_minutes_per_100_sqft_over = n; })} />
+        <Num label="Typical sq ft added per extra bedroom" value={s.matrix_sqft_per_extra_bedroom} max={5000} step={50} onChange={(n) => upd((d) => { d.services[slug].matrix_sqft_per_extra_bedroom = n; })} />
+      </div>
+      <p className="mt-1 text-xs text-muted">Smaller-than-typical homes pay the starting price (never less). Frequencies without a table price fall back to the base price above.</p>
+    </div>
+  );
+}
+
+/** First visit of a recurring plan (initial clean), priced up from the regular visit. */
+function InitialCleanEditor({ slug, s, upd }: { slug: string; s: Svc; upd: Upd }) {
+  const recurring = TABLE_FREQS.some((f) => f !== "one_time" && s.frequencies[f]);
+  if (!recurring) return null;
+  const ic = s.initial_clean ?? { enabled: false, percent: 50, minimum_cents: 0, minutes_percent: 50 };
+  const set = (patch: Partial<typeof ic>) => upd((d) => { d.services[slug].initial_clean = { ...ic, ...patch }; });
+  return (
+    <div className="mt-4 rounded-[var(--radius-control)] border border-line p-3">
+      <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={ic.enabled} onChange={(e) => set({ enabled: e.target.checked })} />Price the first visit as an initial clean</label>
+      <p className="text-xs text-muted">Shown to customers as a separate first-visit price. Regular visits keep the per-visit price. Add-ons aren&apos;t marked up.</p>
+      {ic.enabled && (
+        <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Num label="First visit costs more by" suffix="%" value={ic.percent} max={300} onChange={(n) => set({ percent: n })} />
+          <Money label="First visit at least" cents={ic.minimum_cents} onChange={(c) => set({ minimum_cents: c })} />
+          <Num label="Extra time" suffix="%" value={ic.minutes_percent} max={300} onChange={(n) => set({ minutes_percent: n })} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+type TestOut = { total_cents: number; minutes: number; first_visit_cents: number | null; lines: { label: string; amount_cents: number }[]; review: string[]; mode: string } | { error: string };
 
 function TestPanel({ rules, services, addons }: { rules: PricingRules; services: { slug: string; name: string }[]; addons: { slug: string; name: string }[] }) {
   const firstFreq = (slug: string) => (Object.keys(rules.services[slug]?.frequencies ?? {})[0] ?? "one_time") as Frequency;
@@ -241,7 +321,7 @@ function TestPanel({ rules, services, addons }: { rules: PricingRules; services:
       <p className="text-xs font-bold uppercase tracking-wider text-muted">{title}</p>
       {"error" in o ? <p className="text-sm text-danger">{o.error}</p> : <>
         <p className="font-display text-3xl font-semibold [font-variant-numeric:lining-nums]">{o.mode === "custom" ? "Custom quote" : formatCents(o.total_cents)}</p>
-        <p className="text-xs text-muted">{minutesLabel(o.minutes)}</p>
+        <p className="text-xs text-muted">{minutesLabel(o.minutes)}{o.first_visit_cents !== null ? ` · first visit ${formatCents(o.first_visit_cents)}` : ""}</p>
         <ul className="mt-2 space-y-0.5 text-xs">{o.lines.map((l, i) => <li key={i} className="flex justify-between gap-2"><span>{l.label}</span><span className="tabular-nums">{formatCents(l.amount_cents)}</span></li>)}</ul>
         {o.review.length > 0 && <p className="mt-1 text-xs text-status-pending">Review: {o.review.join("; ")}</p>}
       </>}

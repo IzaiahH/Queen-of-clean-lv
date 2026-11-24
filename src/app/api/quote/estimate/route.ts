@@ -19,6 +19,8 @@ export async function POST(req: Request) {
         lines: r.lines.map((l) => ({ label: l.label, amount_cents: l.amount_cents, kind: l.kind })),
         total_cents: r.total_cents,
         recurring_per_visit_cents: r.recurring_per_visit_cents,
+        first_visit_cents: r.first_visit_cents,
+        first_visit_minutes: r.first_visit_minutes,
         estimated_minutes: r.estimated_minutes,
         requires_review: r.requires_review,
         review_reasons: r.review_reasons,

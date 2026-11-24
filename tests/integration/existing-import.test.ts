@@ -5,6 +5,8 @@ import { createManualAppointment } from "@/lib/server/appointments";
 import { submitBookingRequest } from "@/lib/server/booking";
 import { setCustomerRate, listCustomerRates } from "@/lib/server/customer-rates";
 import { listCustomers } from "@/lib/server/customers";
+import { getPublishedPricing } from "@/lib/server/catalog";
+import { publishDraft, saveDraft, startDraft } from "@/lib/server/pricing-admin";
 import { createSeries } from "@/lib/server/series";
 import { OWNER, bookingRequest, makeCleaner, resetData, weekdayAt } from "./helpers";
 
@@ -225,5 +227,53 @@ describe("historical rates in pricing and booking", () => {
     expect(await names("none")).toEqual(["Nofreq Fictional"]);
     expect((await names()).length).toBe(4);
     expect((await names("nonsense")).length).toBe(4); // unknown values are ignored, not an error
+  });
+
+  it("owner-set customer prices win over the public table and survive publishing new prices", async () => {
+    await apply();
+    const [c] = await db()<{ id: string; property_id: string }[]>`
+      select c.id, p.id as property_id from customers c join properties p on p.customer_id = c.id where c.import_ref = 't-02'`;
+    await db()`update properties set address_line1 = '1 Fictional Way', city = 'Las Vegas', zip = '89101' where id = ${c.property_id}`;
+    // Owner corrects the current price (biweekly stays biweekly). The imported rate is retired, not edited.
+    await setCustomerRate(OWNER, c.id, { service_slug: "recurring", frequency: "biweekly", price_cents: 21000, notes: "Owner-confirmed current price" });
+    // A completed, paid visit at the old price.
+    const appt = await createManualAppointment(OWNER, {
+      customer_id: c.id, property_id: c.property_id, service_slug: "recurring", starts_at: weekdayAt(-7, 9).toISO()!, duration_minutes: 180,
+      price_cents: 24999, cleaner_ids: [], status: "confirmed", frequency: "biweekly", internal_notes: "", force: true,
+    });
+    expect(appt.ok).toBe(true);
+    const [{ id: apptRowId }] = await db()<{ id: string }[]>`select id from appointments where customer_id = ${c.id} limit 1`;
+    await db()`update appointments set status = 'completed' where id = ${apptRowId}`;
+    await db()`insert into payments (customer_id, appointment_id, amount_cents, method) values (${c.id}, ${apptRowId}, 24999, 'cash')`;
+
+    // Publish a new public price list with much higher prices (restored at the end of the test).
+    const original = structuredClone((await getPublishedPricing()).rules);
+    await startDraft(OWNER);
+    const rules = structuredClone(original);
+    for (const row of rules.services.recurring.matrix) for (const f of Object.keys(row.prices) as (keyof typeof row.prices)[]) row.prices[f]! += 10000;
+    rules.services.recurring.frequencies.biweekly = { base_cents: 40000, minimum_cents: 40000 };
+    expect((await saveDraft(OWNER, rules, "test")).ok).toBe(true);
+    expect((await publishDraft(OWNER, "test")).ok).toBe(true);
+
+    const active = (await listCustomerRates(c.id)).filter((r) => r.status === "active");
+    expect(active.map((r) => [r.frequency, r.price_cents])).toEqual([["biweekly", 21000]]);
+    const history = (await listCustomerRates(c.id)).filter((r) => r.status === "retired").map((r) => r.price_cents);
+    expect(history).toEqual([24999]);
+    const [after] = await db()<{ agreed_price_cents: number; status: string }[]>`select agreed_price_cents, status from appointments where id = ${apptRowId}`;
+    expect(after).toEqual({ agreed_price_cents: 24999, status: "completed" });
+    const [{ sum }] = await db()<{ sum: number }[]>`select sum(amount_cents)::int as sum from payments where customer_id = ${c.id}`;
+    expect(sum).toBe(24999);
+    const [{ preferred_frequency }] = await db()<{ preferred_frequency: string }[]>`select preferred_frequency from customers where id = ${c.id}`;
+    expect(preferred_frequency).toBe("biweekly");
+    // Re-running the import reports the changed price instead of putting the old one back.
+    const rec = (await apply()).records.find((x) => x.ref === "t-02")!;
+    expect(rec.outcome).toBe("conflict");
+    expect(rec.details.join(" ")).toMatch(/current biweekly rate is \$210/);
+    expect((await listCustomerRates(c.id)).filter((r) => r.status === "active").map((r) => r.price_cents)).toEqual([21000]);
+
+    // Put the public prices back so later tests see the standard rules.
+    await startDraft(OWNER);
+    expect((await saveDraft(OWNER, original, "restore")).ok).toBe(true);
+    expect((await publishDraft(OWNER, "restore")).ok).toBe(true);
   });
 });

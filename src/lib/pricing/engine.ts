@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CONDITIONS, FREQUENCIES, FREQUENCY_LABELS, type Frequency, type PricingRules } from "./rules";
+import { CONDITIONS, FREQUENCIES, FREQUENCY_LABELS, type Frequency, type MatrixRow, type PricingRules } from "./rules";
 
 export const quoteInputSchema = z.object({
   service: z.string().min(1).max(40),
@@ -47,6 +47,14 @@ export type QuoteResult = {
   total_cents: number;
   /** For recurring frequencies, the price of each visit (equals total). Null for one-time cleans. */
   recurring_per_visit_cents: number | null;
+  /**
+   * First visit of a new recurring plan when the service prices an initial clean (more work the first
+   * time), including tax. Null when there's no separate first-visit price.
+   */
+  first_visit_cents: number | null;
+  first_visit_minutes: number | null;
+  /** Home configuration the starting price came from, when a starting-price table was used. */
+  matched_row: { bedrooms: number; full_baths: number; typical_sqft: number } | null;
   frequency: Frequency;
   estimated_minutes: number;
   requires_review: boolean;
@@ -69,6 +77,23 @@ function roundTotal(cents: number, mode: PricingRules["rounding"]): number {
 
 function pct(amount: number, percent: number): number {
   return Math.round((amount * percent) / 100);
+}
+
+/**
+ * Closest starting-price row for a home, for one frequency:
+ *  - the largest configuration the home fully contains (bedrooms and full baths both at least the row's),
+ *    so rooms beyond it are charged on top rather than the home being rounded down to a cheaper row;
+ *  - a home smaller than every row starts from the smallest row (never below the cheapest price).
+ */
+export function pickMatrixRow(matrix: MatrixRow[], frequency: Frequency, bedrooms: number, fullBaths: number): MatrixRow | null {
+  const rows = matrix.filter((r) => r.prices[frequency] !== undefined);
+  if (!rows.length) return null;
+  const contained = rows.filter((r) => r.bedrooms <= bedrooms && r.full_baths <= fullBaths);
+  const pool = contained.length ? contained : rows;
+  const byPrice = (a: MatrixRow, b: MatrixRow) => a.prices[frequency]! - b.prices[frequency]!;
+  return contained.length
+    ? [...pool].sort((a, b) => b.bedrooms + b.full_baths - (a.bedrooms + a.full_baths) || -byPrice(a, b))[0]
+    : [...pool].sort((a, b) => byPrice(a, b) || a.bedrooms + a.full_baths - (b.bedrooms + b.full_baths))[0];
 }
 
 /**
@@ -95,7 +120,8 @@ export function calculateQuote(rules: PricingRules, rawInput: QuoteInput, names:
   const assumed = rules.assumed_sqft_by_bedrooms;
   const sqftAssumed = input.sqft === null;
   const sqftUsed = input.sqft ?? assumed[Math.min(input.bedrooms, assumed.length - 1)];
-  if (sqftAssumed) notes.push(`Square footage not provided — estimated as about ${sqftUsed.toLocaleString()} sq ft from the bedroom count.`);
+  const assumedNote = `Square footage not provided — estimated as about ${sqftUsed.toLocaleString()} sq ft from the bedroom count.`;
+  if (sqftAssumed) notes.push(assumedNote);
 
   if (svc.quote_mode === "custom") {
     reviewReasons.push("Custom requests are priced individually after we review the details.");
@@ -110,6 +136,9 @@ export function calculateQuote(rules: PricingRules, rawInput: QuoteInput, names:
       subtotal_cents: 0,
       total_cents: 0,
       recurring_per_visit_cents: null,
+      first_visit_cents: null,
+      first_visit_minutes: null,
+      matched_row: null,
       frequency: input.frequency,
       estimated_minutes: minutes,
       requires_review: true,
@@ -120,19 +149,30 @@ export function calculateQuote(rules: PricingRules, rawInput: QuoteInput, names:
     };
   }
 
-  lines.push({
-    kind: "base",
-    label: `${serviceName} — ${FREQUENCY_LABELS[input.frequency]} (includes ${svc.included_bedrooms} bed / ${svc.included_full_baths} bath)`,
-    quantity: 1,
-    amount_cents: freq.base_cents,
-  });
+  const row = pickMatrixRow(svc.matrix, input.frequency, input.bedrooms, input.full_baths);
+  const included = row ? { bedrooms: row.bedrooms, full_baths: row.full_baths } : { bedrooms: svc.included_bedrooms, full_baths: svc.included_full_baths };
+  if (row) {
+    lines.push({
+      kind: "base",
+      label: `Starting price — ${row.bedrooms} bed / ${row.full_baths} bath, ${FREQUENCY_LABELS[input.frequency].toLowerCase()}`,
+      quantity: 1,
+      amount_cents: row.prices[input.frequency]!,
+    });
+  } else {
+    lines.push({
+      kind: "base",
+      label: `${serviceName} — ${FREQUENCY_LABELS[input.frequency]} (includes ${svc.included_bedrooms} bed / ${svc.included_full_baths} bath)`,
+      quantity: 1,
+      amount_cents: freq.base_cents,
+    });
+  }
 
-  const extraBeds = Math.max(0, input.bedrooms - svc.included_bedrooms);
+  const extraBeds = Math.max(0, input.bedrooms - included.bedrooms);
   if (extraBeds > 0) {
     lines.push({ kind: "bedrooms", label: `Additional bedrooms`, quantity: extraBeds, amount_cents: extraBeds * svc.per_extra_bedroom_cents });
     minutes += extraBeds * svc.minutes_per_extra_bedroom;
   }
-  const extraBaths = Math.max(0, input.full_baths - svc.included_full_baths);
+  const extraBaths = Math.max(0, input.full_baths - included.full_baths);
   if (extraBaths > 0) {
     lines.push({ kind: "bathrooms", label: `Additional full bathrooms`, quantity: extraBaths, amount_cents: extraBaths * svc.per_extra_full_bath_cents });
     minutes += extraBaths * svc.minutes_per_extra_full_bath;
@@ -142,16 +182,32 @@ export function calculateQuote(rules: PricingRules, rawInput: QuoteInput, names:
     minutes += input.half_baths * svc.minutes_per_half_bath;
   }
 
-  const band = rules.sqft_bands.find((b) => b.up_to_sqft === null || sqftUsed <= b.up_to_sqft) ?? rules.sqft_bands[rules.sqft_bands.length - 1];
-  if (band.adjust_cents !== 0) {
-    lines.push({
-      kind: "size",
-      label: `Home size (${sqftAssumed ? "estimated " : ""}${sqftUsed.toLocaleString()} sq ft)`,
-      quantity: 1,
-      amount_cents: band.adjust_cents,
-    });
+  if (row) {
+    // Size is measured against what the matched configuration assumes, so a large home with few
+    // bedrooms costs more than a small one, and a small home is never discounted below the start price.
+    const expected = row.typical_sqft + extraBeds * svc.matrix_sqft_per_extra_bedroom;
+    if (sqftAssumed) {
+      notes.splice(notes.indexOf(assumedNote), 1);
+      notes.push("Square footage not provided — priced as a typical home of this size; we'll confirm it with you.");
+    } else if (input.sqft! > expected) {
+      const steps = Math.ceil((input.sqft! - expected) / 100);
+      const amount = steps * svc.matrix_cents_per_100_sqft_over;
+      if (amount > 0)
+        lines.push({ kind: "size", label: `Home size (${input.sqft!.toLocaleString()} sq ft; starting price assumes about ${expected.toLocaleString()})`, quantity: steps, amount_cents: amount });
+      minutes += steps * svc.matrix_minutes_per_100_sqft_over;
+    }
+  } else {
+    const band = rules.sqft_bands.find((b) => b.up_to_sqft === null || sqftUsed <= b.up_to_sqft) ?? rules.sqft_bands[rules.sqft_bands.length - 1];
+    if (band.adjust_cents !== 0) {
+      lines.push({
+        kind: "size",
+        label: `Home size (${sqftAssumed ? "estimated " : ""}${sqftUsed.toLocaleString()} sq ft)`,
+        quantity: 1,
+        amount_cents: band.adjust_cents,
+      });
+    }
+    minutes += band.adjust_minutes;
   }
-  minutes += band.adjust_minutes;
 
   // Condition applies to the cleaning itself (base + rooms + size), not to add-ons.
   const cleaningSubtotal = lines.reduce((s, l) => s + l.amount_cents, 0);
@@ -169,6 +225,10 @@ export function calculateQuote(rules: PricingRules, rawInput: QuoteInput, names:
     if (petAmount > 0) lines.push({ kind: "pets", label: `Pets in the home`, quantity: input.pets, amount_cents: petAmount });
     minutes += rules.pets.minutes;
   }
+
+  // The home's cleaning itself (base, rooms, size, condition, pets) — what an initial clean scales up.
+  const cleaningPortion = lines.reduce((s, l) => s + l.amount_cents, 0);
+  const cleaningMinutes = minutes;
 
   for (const a of input.addons) {
     const ar = rules.addons[a.slug];
@@ -213,6 +273,17 @@ export function calculateQuote(rules: PricingRules, rawInput: QuoteInput, names:
     total += tax;
   }
 
+  // First visit of a recurring plan: an initial clean costs more than the regular visits.
+  let firstVisit: number | null = null;
+  let firstVisitMinutes: number | null = null;
+  const ic = svc.initial_clean;
+  if (ic?.enabled && input.frequency !== "one_time") {
+    const firstPreTax = roundTotal(Math.max(rounded + pct(cleaningPortion, ic.percent), ic.minimum_cents), rules.rounding);
+    firstVisit = rules.tax.enabled && rules.tax.percent > 0 ? firstPreTax + pct(firstPreTax, rules.tax.percent) : firstPreTax;
+    firstVisitMinutes = Math.max(30, Math.round((minutes + (cleaningMinutes * ic.minutes_percent) / 100) / 15) * 15);
+    notes.push(`Your first visit is an initial clean to bring the home up to our standard: about ${(firstVisit / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}. Regular visits after that are the per-visit price.`);
+  }
+
   if (sqftUsed > rules.review.over_sqft) reviewReasons.push("Larger homes are confirmed after a quick review.");
   if (input.bedrooms > rules.review.over_bedrooms) reviewReasons.push("Homes with many bedrooms are confirmed after a quick review.");
   if (input.area_requires_review) reviewReasons.push("Your address needs a quick service-area check before we confirm.");
@@ -224,6 +295,9 @@ export function calculateQuote(rules: PricingRules, rawInput: QuoteInput, names:
     subtotal_cents: rounded,
     total_cents: total,
     recurring_per_visit_cents: input.frequency === "one_time" ? null : total,
+    first_visit_cents: firstVisit,
+    first_visit_minutes: firstVisitMinutes,
+    matched_row: row ? { bedrooms: row.bedrooms, full_baths: row.full_baths, typical_sqft: row.typical_sqft } : null,
     frequency: input.frequency,
     estimated_minutes: Math.max(30, Math.round(minutes / 15) * 15),
     requires_review: reviewReasons.length > 0,

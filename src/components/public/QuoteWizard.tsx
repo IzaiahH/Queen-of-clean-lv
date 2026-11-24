@@ -41,6 +41,8 @@ type Estimate = {
   lines: { label: string; amount_cents: number; kind: string }[];
   total_cents: number;
   recurring_per_visit_cents: number | null;
+  first_visit_cents: number | null;
+  first_visit_minutes: number | null;
   estimated_minutes: number;
   requires_review: boolean;
   review_reasons: string[];
@@ -636,7 +638,15 @@ export function QuoteWizard({ catalog, initialService, initialFrequency = null }
             <div>
               {estimateState === "loading" && <Loading text="Calculating your estimate…" />}
               {estimateState === "error" && <ErrorBox text={estimateError} onRetry={fetchEstimate} />}
-              {estimate && <EstimateCard estimate={estimate} frequency={s.frequency as Frequency} serviceName={service?.name ?? ""} />}
+              {estimate && (
+                <EstimateCard
+                  estimate={estimate}
+                  frequency={s.frequency as Frequency}
+                  serviceName={s.move_type ? MOVE_TYPE_LABELS[s.move_type] : service?.name ?? ""}
+                  home={{ bedrooms: s.bedrooms, full_baths: s.full_baths, half_baths: s.half_baths, sqft: s.sqft_unknown || !s.sqft ? null : Number(s.sqft) }}
+                  extras={addons.filter((a) => (s.addons[a.slug] ?? 0) > 0).map((a) => `${a.name}${a.unit === "each" ? ` ×${s.addons[a.slug]}` : ""}`)}
+                />
+              )}
               {estimate && (
                 <fieldset className="mt-6">
                   <legend className="field-label">What would you like to do next?</legend>
@@ -659,7 +669,7 @@ export function QuoteWizard({ catalog, initialService, initialFrequency = null }
             <div>
               {estimate && (
                 <p className="mb-4 text-sm text-muted">
-                  Estimated length: <strong className="text-charcoal">{minutesLabel(estimate.estimated_minutes)}</strong>. Times shown are arrival times that are open on our calendar right now.
+                  Estimated length{estimate.first_visit_minutes ? " of your first visit" : ""}: <strong className="text-charcoal">{minutesLabel(estimate.first_visit_minutes ?? estimate.estimated_minutes)}</strong>. Times shown are arrival times that are open on our calendar right now.
                 </p>
               )}
               {availState === "loading" && <Loading text="Checking the calendar…" />}
@@ -845,26 +855,54 @@ function ErrorBox({ text, onRetry }: { text: string; onRetry: () => void }) {
   );
 }
 
-function EstimateCard({ estimate, frequency, serviceName }: { estimate: Estimate; frequency: Frequency; serviceName: string }) {
+function EstimateCard({ estimate, frequency, serviceName, home, extras }: {
+  estimate: Estimate;
+  frequency: Frequency;
+  serviceName: string;
+  home: { bedrooms: number; full_baths: number; half_baths: number; sqft: number | null };
+  extras: string[];
+}) {
+  const summary = (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 px-6 py-4 text-sm">
+      <dt className="text-muted">Service</dt><dd className="font-semibold">{serviceName}</dd>
+      <dt className="text-muted">Frequency</dt><dd className="font-semibold">{FREQUENCY_LABELS[frequency]}</dd>
+      <dt className="text-muted">Home</dt>
+      <dd className="font-semibold">{home.bedrooms} bed · {home.full_baths} bath{home.half_baths ? ` · ${home.half_baths} half bath` : ""}</dd>
+      <dt className="text-muted">Size</dt><dd className="font-semibold">{home.sqft ? `${home.sqft.toLocaleString()} sq ft` : "Not sure"}</dd>
+      <dt className="text-muted">Extras</dt><dd className="font-semibold">{extras.length ? extras.join(", ") : "None"}</dd>
+    </dl>
+  );
   if (estimate.mode === "custom") {
     return (
-      <div className="card p-6">
-        <p className="eyebrow">Custom quote</p>
-        <p className="mt-2 font-display text-3xl">We&apos;ll prepare a custom price</p>
-        <p className="mt-2 text-sm text-muted">Custom requests are priced after we review your details. You can still request a time — nothing is confirmed until we reply.</p>
+      <div className="card overflow-hidden">
+        <div className="p-6">
+          <p className="eyebrow">Custom quote</p>
+          <p className="mt-2 font-display text-3xl">We&apos;ll prepare a custom price</p>
+          <p className="mt-2 text-sm text-muted">Custom requests are priced after we review your details. You can still request a time — nothing is confirmed until we reply.</p>
+        </div>
+        <div className="border-t border-line">{summary}</div>
       </div>
     );
   }
+  const recurring = estimate.recurring_per_visit_cents !== null;
+  const first = estimate.first_visit_cents;
   return (
     <div className="frame overflow-hidden rounded-sm bg-paper">
       <div className="on-dark bg-obsidian px-6 py-6 text-ivory">
         <p className="eyebrow">{estimate.requires_review ? "Estimate · subject to review" : "Estimate"}</p>
         <p className="mt-1 text-sm text-ivory/70">{serviceName} · {FREQUENCY_LABELS[frequency]}</p>
         <p className="gold-text mt-2 font-display text-5xl font-semibold">{formatCents(estimate.total_cents)}</p>
-        <p className="text-sm text-ivory/70">{estimate.recurring_per_visit_cents !== null ? "per visit" : "one-time"} · about {minutesLabel(estimate.estimated_minutes)} of cleaning</p>
+        <p className="text-sm text-ivory/70">{recurring ? "estimated price per visit" : "estimated price"} · about {minutesLabel(estimate.estimated_minutes)} of cleaning</p>
+        {first !== null && (
+          <p className="mt-3 rounded-sm border border-gold/40 bg-white/5 px-3 py-2 text-sm text-ivory/90">
+            First visit (initial clean): <strong className="text-champagne">{formatCents(first)}</strong>
+            {estimate.first_visit_minutes ? <> · about {minutesLabel(estimate.first_visit_minutes)}</> : null}
+          </p>
+        )}
       </div>
-      <table className="w-full text-sm">
-        <caption className="sr-only">Estimate breakdown</caption>
+      {summary}
+      <table className="w-full border-t border-line text-sm">
+        <caption className="sr-only">How your estimate is calculated</caption>
         <tbody>
           {estimate.lines.map((l, i) => (
             <tr key={i} className="border-b border-line/70">
@@ -872,17 +910,24 @@ function EstimateCard({ estimate, frequency, serviceName }: { estimate: Estimate
               <td className="px-6 py-2.5 text-right tabular-nums">{l.amount_cents < 0 ? "−" : ""}{formatCents(Math.abs(l.amount_cents))}</td>
             </tr>
           ))}
-          <tr>
-            <td className="px-6 py-3 font-bold">Estimated total</td>
+          <tr className={first !== null ? "border-b border-line/70" : ""}>
+            <td className="px-6 py-3 font-bold">{recurring ? "Estimated price per visit" : "Estimated total"}</td>
             <td className="px-6 py-3 text-right font-bold tabular-nums">{formatCents(estimate.total_cents)}</td>
           </tr>
+          {first !== null && (
+            <tr>
+              <td className="px-6 py-3 font-bold">Estimated first-visit total</td>
+              <td className="px-6 py-3 text-right font-bold tabular-nums">{formatCents(first)}</td>
+            </tr>
+          )}
         </tbody>
       </table>
       <div className="space-y-2 border-t border-line px-6 py-4 text-sm text-muted">
         {estimate.area_message && <p className="font-semibold text-status-pending">{estimate.area_message}</p>}
         {estimate.review_reasons.filter((r) => r !== estimate.area_message).map((r) => <p key={r} className="font-semibold text-status-pending">{r}</p>)}
         {estimate.notes.map((n) => <p key={n}>{n}</p>)}
-        <p>This is an estimate, not a final price. If the home&apos;s condition or the scope is different from what you described — for example heavy buildup — the price may change, and we&apos;ll always discuss it with you first.</p>
+        <p className="font-semibold text-charcoal">This is an estimate, not a final price.</p>
+        <p>Prices start from our standard rates for a home like yours. If the home&apos;s condition or what needs cleaning is substantially different from what you described — for example heavy buildup — the final price may change, and we&apos;ll always discuss it with you first.</p>
       </div>
     </div>
   );
@@ -1012,12 +1057,13 @@ function Review({ s, estimate, catalog, serviceName, addons, onEdit }: { s: Stat
       </Section>
       <Section onEdit={onEdit} title="Estimate" step={3}>
         {estimate.mode === "custom" ? <Row k="Price" v="Custom quote after review" /> : estimate.lines.map((l, i) => <Row key={i} k={l.label} v={formatCents(l.amount_cents)} />)}
-        {estimate.mode !== "custom" && <Row k={<strong>Estimated total</strong>} v={<strong>{formatCents(estimate.total_cents)}</strong>} />}
+        {estimate.mode !== "custom" && <Row k={<strong>{estimate.recurring_per_visit_cents !== null ? "Estimated price per visit" : "Estimated total"}</strong>} v={<strong>{formatCents(estimate.total_cents)}</strong>} />}
+        {estimate.mode !== "custom" && estimate.first_visit_cents !== null && <Row k={<strong>First visit (initial clean)</strong>} v={<strong>{formatCents(estimate.first_visit_cents)}</strong>} />}
       </Section>
       {s.mode === "book" && s.slot && (
         <Section onEdit={onEdit} title="Requested time" step={4}>
           <Row k="Arrival" v={new Date(s.slot.start).toLocaleString("en-US", { timeZone: "America/Los_Angeles", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} />
-          <Row k="Estimated length" v={minutesLabel(estimate.estimated_minutes)} />
+          <Row k="Estimated length" v={minutesLabel(estimate.first_visit_minutes ?? estimate.estimated_minutes)} />
           {s.preferences && <Row k="Preferences" v={s.preferences} />}
         </Section>
       )}

@@ -56,8 +56,10 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
           )}
           <table className="mt-4 w-full text-sm"><tbody>
             {q.breakdown.lines.map((l, i) => <tr key={i} className="border-t border-line"><td className="py-1.5">{l.label}{l.quantity > 1 ? ` × ${l.quantity}` : ""}</td><td className="py-1.5 text-right tabular-nums">{formatCents(l.amount_cents)}</td></tr>)}
-            <tr className="border-t-2 border-charcoal font-semibold"><td className="py-1.5">Calculated total</td><td className="py-1.5 text-right tabular-nums">{formatCents(q.estimate_cents)}</td></tr>
+            <tr className="border-t-2 border-charcoal font-semibold"><td className="py-1.5">{q.recurring_cents !== null ? "Calculated price per visit" : "Calculated total"}</td><td className="py-1.5 text-right tabular-nums">{formatCents(q.estimate_cents)}</td></tr>
+            {q.breakdown.first_visit_cents != null && <tr className="border-t border-line"><td className="py-1.5">First visit (initial clean)</td><td className="py-1.5 text-right tabular-nums">{formatCents(q.breakdown.first_visit_cents)}</td></tr>}
           </tbody></table>
+          {q.breakdown.matched_row && <p className="mt-2 text-xs text-muted">Starting price from the {q.breakdown.matched_row.bedrooms} bed / {q.breakdown.matched_row.full_baths} bath row (assumes about {q.breakdown.matched_row.typical_sqft.toLocaleString()} sq ft).</p>}
           {q.breakdown.notes.length > 0 && <ul className="mt-3 list-disc pl-5 text-xs text-muted">{q.breakdown.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
           <p className="mt-3 text-xs text-muted">Priced with pricing version {q.pricing_version}. Later price changes don&apos;t alter this quote.</p>
         </section>

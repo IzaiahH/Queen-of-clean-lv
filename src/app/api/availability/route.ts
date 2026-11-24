@@ -33,14 +33,14 @@ export async function POST(req: Request) {
     let from = parsed.data.from ? DateTime.fromISO(parsed.data.from, { zone: tz }) : today;
     if (from < today) from = today;
     const last = today.plus({ days: settings.booking.horizon_days });
-    if (from > last) return json({ ok: true, days: [], duration_minutes: priced.result.estimated_minutes, tz, horizon_end: last.toISODate() });
+    if (from > last) return json({ ok: true, days: [], duration_minutes: (priced.result.first_visit_minutes ?? priced.result.estimated_minutes), tz, horizon_end: last.toISODate() });
     const days = Math.min(parsed.data.days, Math.max(1, Math.floor(last.diff(from, "days").days) + 1));
     const ctx = await loadScheduleContext(sql, settings, from, from.plus({ days }));
-    const result = listSlots(ctx, from.toISODate()!, days, priced.result.estimated_minutes, { serviceSlug: parsed.data.property.service });
+    const result = listSlots(ctx, from.toISODate()!, days, (priced.result.first_visit_minutes ?? priced.result.estimated_minutes), { serviceSlug: parsed.data.property.service });
     return json({
       ok: true,
       tz,
-      duration_minutes: priced.result.estimated_minutes,
+      duration_minutes: (priced.result.first_visit_minutes ?? priced.result.estimated_minutes),
       horizon_end: last.toISODate(),
       days: result.map((d) => ({ date: d.date, label: d.label, slots: d.slots.map((s) => ({ start: s.start, label: s.label })) })),
     });
