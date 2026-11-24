@@ -26,6 +26,16 @@ A short guide to running Queen of Clean LV day to day. Sign in at **yourdomain.c
    - Imported customers are marked "Imported" with the spreadsheet values in their private notes. Nothing is scheduled until you book it.
 8. **Settings → Emails.** Use **Send me a test** to make sure email is working. Every email shows as Sent, Not sent or Failed, and nothing claims to be sent when it wasn't.
 
+9. **Supabase → Authentication (one time, for "Forgot password?").** Without these, reset emails send people to `localhost` and the link fails.
+   - **URL Configuration:** set **Site URL** to your live address (for example `https://queen-of-clean-lv.vercel.app`, or your own domain later). Under **Redirect URLs**, add the same address followed by `/admin/**`.
+   - **Email Templates → Reset Password:** make the link in the message point to
+     `{{ .SiteURL }}/admin/auth/confirm?token_hash={{ .TokenHash }}&type=recovery`
+   - When you move to your own domain, update the Site URL and Redirect URLs, and `APP_URL` in Vercel.
+
+### Forgot your password?
+
+On the sign-in page, tap **Forgot password?** and enter your email. Open the link in the email (it works once and expires after an hour), tap **Continue**, then choose a new password of at least 12 characters. You'll be signed out everywhere and can sign in with the new password. An owner can also set a new password for anyone from **Settings → Team logins**.
+
 ## Every day
 
 - **Dashboard.** Shows today's jobs, requests waiting for review, anything that needs attention, and this month's numbers.
