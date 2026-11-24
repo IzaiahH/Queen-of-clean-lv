@@ -4,6 +4,7 @@ import { importExistingCustomers } from "@/lib/import/existing-customers";
 import { createManualAppointment } from "@/lib/server/appointments";
 import { submitBookingRequest } from "@/lib/server/booking";
 import { setCustomerRate, listCustomerRates } from "@/lib/server/customer-rates";
+import { listCustomers } from "@/lib/server/customers";
 import { createSeries } from "@/lib/server/series";
 import { OWNER, bookingRequest, makeCleaner, resetData, weekdayAt } from "./helpers";
 
@@ -211,5 +212,18 @@ describe("historical rates in pricing and booking", () => {
     const [{ full_name }] = await db()<{ full_name: string }[]>`select full_name from customers where import_ref = 't-03'`;
     expect(full_name).toBe("Lee Madeup");
     expect(await count("select count(*)::int as n from customers")).toBe(3);
+  });
+
+  it("customer list filters by frequency (schedule, preferred frequency or rate)", async () => {
+    await apply();
+    await db()`insert into customers (full_name, status, source) values ('Nofreq Fictional', 'lead', 'admin')`;
+    const names = async (frequency?: string) =>
+      (await listCustomers({ status: "all", frequency, limit: 50, offset: 0 })).map((c) => c.full_name).sort();
+    expect(await names("monthly")).toEqual(["Rowan Fictional"]);
+    expect(await names("biweekly")).toEqual(["Kit Imaginary"]);
+    expect(await names("weekly")).toEqual(["Lee Madeup"]);
+    expect(await names("none")).toEqual(["Nofreq Fictional"]);
+    expect((await names()).length).toBe(4);
+    expect((await names("nonsense")).length).toBe(4); // unknown values are ignored, not an error
   });
 });

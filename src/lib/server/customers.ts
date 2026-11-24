@@ -19,17 +19,17 @@ export const customerInputSchema = z.object({
 export type CustomerInput = z.input<typeof customerInputSchema>;
 
 export const propertyEditSchema = z.object({
-  label: z.string().trim().min(1).max(60),
+  label: z.string().trim().min(1, "Give this home a name, e.g. Home").max(60),
   address_line1: z.string().trim().max(200).transform((v) => v || null),
   unit: z.string().trim().max(40).transform((v) => v || null),
-  city: z.string().trim().min(1).max(80),
-  state: z.string().trim().min(2).max(2).default("NV"),
+  city: z.string().trim().min(1, "Enter the city").max(80),
+  state: z.string().trim().length(2, "Use the 2-letter state, e.g. NV").default("NV"),
   zip: z.string().trim().regex(/^(\d{5})?$/, "ZIP must be 5 digits").transform((v) => v || null),
   property_type: z.enum(["house", "townhome", "condo", "apartment", "other"]),
-  bedrooms: z.number().int().min(0).max(20).nullable(),
-  full_baths: z.number().int().min(0).max(20).nullable(),
-  half_baths: z.number().int().min(0).max(20),
-  sqft: z.number().int().min(100).max(50000).nullable(),
+  bedrooms: z.number({ error: "Enter a number" }).int("Whole number only").min(0).max(20, "At most 20").nullable(),
+  full_baths: z.number({ error: "Enter a number" }).int("Whole number only").min(0).max(20, "At most 20").nullable(),
+  half_baths: z.number({ error: "Enter a number" }).int("Whole number only").min(0).max(20, "At most 20"),
+  sqft: z.number({ error: "Enter a number" }).int("Whole number only").min(100, "At least 100 sq ft").max(50000, "At most 50,000 sq ft").nullable(),
   pets: z.string().max(300),
   condition: z.enum(["light", "standard", "heavy", "extreme"]).nullable(),
   access_instructions: z.string().max(2000),
@@ -44,7 +44,11 @@ export type CustomerListRow = {
   preferred_frequency: string | null; rate_cents: number | null; rate_frequency: string | null; rate_kind: string | null;
 };
 
-export async function listCustomers(f: { q?: string; status?: string; sort?: string; area?: string; limit: number; offset: number }) {
+/** Frequencies the customer list can filter by; "none" = no recurring schedule, preferred frequency or rate. */
+export const CUSTOMER_FREQUENCY_FILTERS = ["weekly", "biweekly", "monthly", "quarterly", "one_time", "none"] as const;
+
+export async function listCustomers(f: { q?: string; status?: string; sort?: string; area?: string; frequency?: string; limit: number; offset: number }) {
+  const freq = (CUSTOMER_FREQUENCY_FILTERS as readonly string[]).includes(f.frequency ?? "") ? f.frequency! : null;
   const q = f.q?.trim() ? `%${f.q.trim().toLowerCase()}%` : null;
   const digits = f.q?.replace(/\D/g, "") ?? "";
   const qd = digits.length >= 3 ? `%${digits}%` : null;
@@ -68,6 +72,10 @@ export async function listCustomers(f: { q?: string; status?: string; sort?: str
        and (${status}::text is null or c.status = ${status})
        and (${status}::text is not null or c.status <> 'archived')
        and (${f.area || null}::uuid is null or p.service_area_id = ${f.area || null})
+       -- Effective frequency, as shown in the list: active recurring schedule, else preferred frequency, else active rate.
+       and (${freq}::text is null or coalesce(
+             (select frequency from recurring_series s where s.customer_id = c.id and s.status = 'active' limit 1),
+             c.preferred_frequency, r.frequency, 'none') = ${freq})
        and (${q}::text is null or lower(c.full_name) like ${q} or lower(coalesce(c.email,'')) like ${q}
             or (${qd}::text is not null and c.phone_digits like ${qd})
             or exists (select 1 from properties pp where pp.customer_id = c.id and lower(coalesce(pp.address_line1,'')) like ${q}))

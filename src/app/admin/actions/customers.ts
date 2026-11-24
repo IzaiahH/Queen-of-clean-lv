@@ -8,13 +8,12 @@ import {
   type CustomerInput, type PropertyEdit,
 } from "@/lib/server/customers";
 import { retireCustomerRate, setCustomerRate, type rateInput } from "@/lib/server/customer-rates";
-import { guard } from "./guard";
+import { guard, zodToRes } from "./guard";
 
 const uuid = z.string().uuid();
 
 function zodMessage(e: unknown) {
-  if (e instanceof z.ZodError) return e.issues.map((i) => i.message).join("; ");
-  return null;
+  return e instanceof z.ZodError ? zodToRes(e) : null;
 }
 
 export async function createCustomerAction(input: CustomerInput, property: PropertyEdit | null, allowDuplicate: boolean) {
@@ -28,7 +27,7 @@ export async function createCustomerAction(input: CustomerInput, property: Prope
       return { ok: true, message: "Customer added.", data: { id } };
     } catch (e) {
       const m = zodMessage(e);
-      if (m) return { ok: false, error: m };
+      if (m) return m;
       throw e;
     }
   });
@@ -41,7 +40,7 @@ export async function updateCustomerAction(id: string, input: CustomerInput) {
       return { ok: true, message: "Customer saved." };
     } catch (e) {
       const m = zodMessage(e);
-      if (m) return { ok: false, error: m };
+      if (m) return m;
       throw e;
     }
   });
@@ -65,7 +64,7 @@ export async function savePropertyAction(customerId: string, propertyId: string 
       return { ok: true, message: "Property saved." };
     } catch (e) {
       const m = zodMessage(e);
-      if (m) return { ok: false, error: m };
+      if (m) return m;
       throw e;
     }
   });

@@ -9,12 +9,20 @@ import { requirePage } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { formatCents } from "@/lib/money";
 import { frequencyLabel } from "@/lib/scheduling/recurrence";
-import { listCustomers } from "@/lib/server/customers";
+import { CUSTOMER_FREQUENCY_FILTERS, listCustomers } from "@/lib/server/customers";
 import { getSettings } from "@/lib/server/settings";
 import { formatDate, formatDateTime } from "@/lib/time";
 
 export const metadata = { title: "Customers" };
 const PAGE = 50;
+const FREQ_LABELS: Record<(typeof CUSTOMER_FREQUENCY_FILTERS)[number], string> = {
+  weekly: "Weekly", biweekly: "Every 2 weeks", monthly: "Monthly", quarterly: "Quarterly", one_time: "One-time", none: "No frequency set",
+};
+/** What the list shows: active recurring schedule, else preferred frequency, else the active rate's frequency. */
+function frequencyOf(c: { recurring: string | null; preferred_frequency: string | null; rate_frequency: string | null }) {
+  const f = c.recurring ?? c.preferred_frequency ?? c.rate_frequency;
+  return f ? (FREQ_LABELS[f as keyof typeof FREQ_LABELS] ?? frequencyLabel(f as "weekly")) : null;
+}
 const STATUSES = [["", "Current"], ["active", "Active"], ["unverified", "To verify"], ["lead", "Leads"], ["inactive", "Inactive"], ["archived", "Archived"], ["all", "All"]] as const;
 
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
@@ -56,12 +64,12 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   }
 
   const page = Math.max(1, Number(sp.page) || 1);
-  const rows = await listCustomers({ q: sp.q, status: sp.status, sort: sp.sort, limit: PAGE + 1, offset: (page - 1) * PAGE });
+  const rows = await listCustomers({ q: sp.q, status: sp.status, sort: sp.sort, frequency: sp.frequency, limit: PAGE + 1, offset: (page - 1) * PAGE });
   const more = rows.length > PAGE;
   const list = rows.slice(0, PAGE);
   const qs = (o: Record<string, string | number | undefined>) => {
     const p = new URLSearchParams();
-    for (const [k, v] of Object.entries({ q: sp.q, status: sp.status, sort: sp.sort, ...o })) if (v) p.set(k, String(v));
+    for (const [k, v] of Object.entries({ q: sp.q, status: sp.status, sort: sp.sort, frequency: sp.frequency, ...o })) if (v) p.set(k, String(v));
     return `?${p}`;
   };
 
@@ -69,10 +77,13 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
     <div className="space-y-5">
       <PageHeader eyebrow="CRM" title="Customers" actions={<><Link href="/admin/import-export" className="btn btn-outline">Import</Link><NewCustomerButton initiallyOpen={sp.new === "1"} /></>} />
       {tabs}
-      <form className="grid gap-3 sm:grid-cols-[1fr_auto_auto_auto]" action="">
+      <form className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_auto_auto_auto_auto]" action="">
         <label className="sr-only" htmlFor="cq">Search</label>
-        <input id="cq" name="q" className="input" placeholder="Search name, email, phone or street" defaultValue={sp.q ?? ""} />
+        <input id="cq" name="q" className="input col-span-2 sm:col-span-1" placeholder="Search name, email, phone or street" defaultValue={sp.q ?? ""} />
         <select name="status" className="input" defaultValue={sp.status ?? ""} aria-label="Status">{STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+        <select name="frequency" className="input" defaultValue={sp.frequency ?? ""} aria-label="Frequency">
+          <option value="">Any frequency</option>{CUSTOMER_FREQUENCY_FILTERS.map((f) => <option key={f} value={f}>{FREQ_LABELS[f]}</option>)}
+        </select>
         <select name="sort" className="input" defaultValue={sp.sort ?? "name"} aria-label="Sort">
           <option value="name">Name A–Z</option><option value="recent">Newest first</option><option value="last_visit">Last visit</option>{showMoney && <option value="value">Lifetime value</option>}
         </select>
@@ -80,7 +91,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
       </form>
 
       {list.length === 0 ? (
-        <EmptyState title={sp.q ? "No customers match" : "No customers yet"} action={!sp.q ? <Link href="/admin/import-export" className="btn btn-outline">Import a spreadsheet</Link> : undefined}>
+        <EmptyState title={sp.q || sp.frequency ? "No customers match" : "No customers yet"} action={!sp.q ? <Link href="/admin/import-export" className="btn btn-outline">Import a spreadsheet</Link> : undefined}>
           {sp.q ? "Try a shorter search, a phone number, or a different status." : "Add customers one at a time or import your existing list."}
         </EmptyState>
       ) : (
@@ -95,7 +106,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                     <td className="text-xs">{c.email ?? "—"}<span className="block text-muted">{c.phone ?? ""}</span></td>
                     <td className="text-sm">{c.area ?? c.city ?? "—"}</td>
                     <td className="text-sm">
-                      {c.recurring ? frequencyLabel(c.recurring as "weekly") : c.preferred_frequency && c.preferred_frequency !== "one_time" ? frequencyLabel(c.preferred_frequency as "weekly") : "—"}
+                      {frequencyOf(c) ?? "—"}
                       {c.rate_cents !== null && <span className="block text-xs text-muted">{formatCents(c.rate_cents)}/visit{c.rate_kind === "historical" ? " · historical" : " · custom"}</span>}
                     </td>
                     <td className="text-sm">{c.last_visit ? formatDate(c.last_visit, tz) : "—"}</td>
@@ -112,7 +123,8 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
               <li key={c.id}><Link href={`/admin/customers/${c.id}`} className="card block p-4">
                 <span className="flex items-start justify-between gap-2"><span className="font-semibold">{c.full_name}</span><StatusBadge status={c.status} /></span>
                 <span className="block text-xs text-muted">{[c.phone, c.email].filter(Boolean).join(" · ") || "No contact details"}</span>
-                <span className="mt-1 block text-xs">{c.next_visit ? `Next: ${formatDate(c.next_visit, tz)}` : c.last_visit ? `Last: ${formatDate(c.last_visit, tz)}` : "No visits yet"}{c.recurring ? " · Recurring" : ""}{c.rate_cents !== null ? ` · ${formatCents(c.rate_cents)}/visit` : ""}</span>
+                <span className="mt-1 block text-sm font-semibold text-gold-ink">{frequencyOf(c) ?? "No frequency set"}{c.rate_cents !== null ? ` · ${formatCents(c.rate_cents)}/visit` : ""}</span>
+                <span className="mt-1 block text-xs">{c.next_visit ? `Next: ${formatDate(c.next_visit, tz)}` : c.last_visit ? `Last: ${formatDate(c.last_visit, tz)}` : "No visits yet"}{c.recurring ? " · Recurring schedule" : ""}</span>
               </Link></li>
             ))}
           </ul>

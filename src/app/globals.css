@@ -200,7 +200,11 @@
     box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-gold) 25%, transparent);
   }
   .input[aria-invalid="true"] {
-    border-color: var(--color-danger);
+    border: 2px solid var(--color-danger);
+    background: color-mix(in oklab, var(--color-danger) 5%, var(--color-paper));
+  }
+  .input[aria-invalid="true"]:focus {
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-danger) 25%, transparent);
   }
   .input:disabled {
     opacity: 0.6;
