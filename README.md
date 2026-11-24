@@ -172,6 +172,8 @@ npm run import:existing -- private/existing-customers.json
 
    **No local tools?** Create the user in Authentication → Users → **Add user** (tick "Auto Confirm User"), then run `supabase/link-owner.sql` in the SQL editor with that email and name filled in.
 
+Upgrading a database that was set up before Phases 2–3: paste `supabase/upgrade-phases-2-3.sql` into the Supabase SQL Editor and run it once, **before** deploying the new code. It only adds things, runs all-or-nothing, and refuses to run twice.
+
 ## Email setup (Resend)
 
 1. Create a Resend account and add your domain under **Domains**.
