@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { ArrowRight, MapPin } from "lucide-react";
+import { ArrowRight, Check, MapPin } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { HeroVisual } from "@/components/public/HeroVisual";
-import { SectionHeading } from "@/components/public/SectionHeading";
+import { SectionHeading, headlineLines } from "@/components/public/SectionHeading";
 import { db } from "@/lib/db";
 import { formatCents } from "@/lib/money";
 import { lowestStartingPrice, startingPrices } from "@/lib/pricing/display";
@@ -18,6 +18,9 @@ const STEPS = [
   { title: "See your estimate", body: "A clear, line-by-line estimate from our current pricing. No phone tag." },
   { title: "Pick a time", body: "Choose from times that are actually open. We confirm every request personally." },
 ];
+
+const HERO_PROMISES = ["Free estimate in minutes", "Real calendar availability", "Confirmed by our team"];
+
 
 const RECURRING_BENEFITS = [
   "The same standard every visit, following your home's checklist",
@@ -46,21 +49,36 @@ export default async function HomePage() {
       {/* 1. Hero */}
       <section className="relative overflow-hidden bg-ivory">
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(48rem_28rem_at_85%_0%,rgb(229_210_166/0.45),transparent_65%)]" />
-        <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-8 sm:px-6 sm:pt-12 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:pb-24 lg:pt-16">
+        <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 pb-16 pt-8 sm:px-6 sm:pt-12 lg:grid-cols-[1.1fr_1fr] lg:gap-16 lg:pb-24 lg:pt-16">
           <div className="text-center lg:text-left">
             <div className="flex justify-center lg:hidden">
-              <Logo variant="wordmark" height={150} name={business.name} priority />
+              <Logo variant="wordmark" height={112} name={business.name} priority />
             </div>
-            <p className="eyebrow mt-8 lg:mt-0">Home cleaning across the Las Vegas Valley</p>
-            <h1 className="mt-4 text-balance text-[2.55rem] font-semibold leading-[1.05] text-charcoal sm:text-6xl">{business.hero_headline}</h1>
-            <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-muted sm:text-lg lg:mx-0">{business.hero_subtext}</p>
+            <p className="kicker mt-6 lg:mt-0">Home cleaning across the Las Vegas Valley</p>
+            <h1 className="mt-3 text-[2.6rem] font-semibold leading-[1.04] text-charcoal sm:text-6xl lg:text-[3.5rem]">
+              {headlineLines(business.hero_headline).map((line) => (
+                <span key={line} className="block text-balance">{line}</span>
+              ))}
+            </h1>
+            <p className="mx-auto mt-5 max-w-[34rem] text-base leading-relaxed text-muted sm:text-lg lg:mx-0">{business.hero_subtext}</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
               <Link href="/quote" className="btn btn-primary btn-lg">Get My Free Quote</Link>
               <Link href="/services" className="btn btn-outline btn-lg">Explore Our Services</Link>
             </div>
-            <p className="mt-5 text-sm text-muted">Free estimate in minutes · Real calendar availability · Confirmed by our team</p>
+            <ul className="mt-6 flex flex-col items-center gap-2 text-sm text-muted sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-5 lg:justify-start">
+              {HERO_PROMISES.map((t) => (
+                <li key={t} className="inline-flex items-center gap-1.5">
+                  <Check className="size-4 text-gold-dark" aria-hidden strokeWidth={2.5} />
+                  {t}
+                </li>
+              ))}
+            </ul>
           </div>
-          <HeroVisual imageUrl={business.hero_image_url} imageAlt={business.hero_image_alt} name={business.name} />
+          {business.hero_image_url ? (
+            <HeroVisual imageUrl={business.hero_image_url} imageAlt={business.hero_image_alt} name={business.name} />
+          ) : (
+            <PriceMenu items={listed.map((s) => ({ slug: s.slug, name: s.name, cents: lowestStartingPrice(pricing.rules, s.slug) }))} />
+          )}
         </div>
       </section>
 
@@ -71,9 +89,11 @@ export default async function HomePage() {
             <SectionHeading eyebrow="Why Queen of Clean LV" title="Care you can see. Service you can count on." />
             <div className="mt-14 grid gap-px overflow-hidden rounded-[var(--radius-card)] border border-line bg-line sm:grid-cols-2">
               {business.strengths.map((s) => (
-                <div key={s.title} className="bg-paper p-7 sm:p-8">
-                  <span aria-hidden className="block size-2 rotate-45 bg-gold" />
-                  <h3 className="mt-4 text-2xl font-semibold">{s.title}</h3>
+                <div key={s.title} className="bg-paper p-6 sm:p-8">
+                  <h3 className="flex items-center gap-3 text-2xl font-semibold">
+                    <span aria-hidden className="size-2 shrink-0 rotate-45 bg-gold" />
+                    {s.title}
+                  </h3>
                   <p className="mt-2 leading-relaxed text-muted">{s.body}</p>
                 </div>
               ))}
@@ -119,12 +139,16 @@ export default async function HomePage() {
       <section id="how-it-works" className="section scroll-mt-24 bg-paper">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <SectionHeading eyebrow="How it works" title="From quote to clean in four simple steps" />
-          <ol className="mt-14 grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
+          <ol className="relative mx-auto mt-12 grid max-w-md gap-8 sm:mt-14 sm:max-w-none sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
+            {/* Thread joining the four steps on wide screens; the circles sit on top of it. */}
+            <span aria-hidden className="absolute inset-x-[12.5%] top-7 hidden h-px bg-gold/40 lg:block" />
             {STEPS.map((s, i) => (
-              <li key={s.title} className="relative text-center">
-                <span className="mx-auto flex size-14 items-center justify-center rounded-full border border-gold font-display text-2xl font-semibold text-gold-dark">{i + 1}</span>
-                <h3 className="mt-5 text-xl font-semibold">{s.title}</h3>
-                <p className="mx-auto mt-2 max-w-[16rem] text-sm leading-relaxed text-muted">{s.body}</p>
+              <li key={s.title} className="relative flex gap-5 text-left sm:block sm:text-center">
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-full border border-gold bg-paper font-display text-2xl font-semibold text-gold-dark sm:mx-auto sm:size-14">{i + 1}</span>
+                <div>
+                  <h3 className="mt-1 text-xl font-semibold sm:mt-5">{s.title}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted sm:mx-auto sm:max-w-[16rem]">{s.body}</p>
+                </div>
               </li>
             ))}
           </ol>
@@ -139,15 +163,20 @@ export default async function HomePage() {
         <section id="plans" className="section scroll-mt-24 bg-cream/70">
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
             <SectionHeading eyebrow="Recurring cleaning plans" title="Your home, at the same standard every visit" />
-            <div className="mt-14 grid gap-5 md:grid-cols-3">
+            <div className="mt-12 grid gap-4 sm:mt-14 md:grid-cols-3 md:gap-5">
               {plans.map((p) => (
-                <div key={p.frequency} className="card flex flex-col items-center p-8 text-center">
-                  <p className="eyebrow">{FREQUENCY_LABELS[p.frequency]}</p>
-                  <p className="mt-4 text-sm text-muted">Starting at</p>
-                  <p className="font-display text-5xl font-semibold text-charcoal">{formatCents(p.cents)}</p>
-                  <p className="mt-1 text-sm text-muted">per visit</p>
-                  <Link href={`/quote?service=recurring&frequency=${p.frequency}`} className="btn btn-outline mt-6 w-full">
-                    Price my {FREQUENCY_LABELS[p.frequency].toLowerCase()} plan
+                <div key={p.frequency} className="card flex items-center justify-between gap-4 px-5 py-5 md:flex-col md:justify-start md:p-8 md:text-center">
+                  <div>
+                    <p className="text-sm font-semibold text-gold-ink">{FREQUENCY_LABELS[p.frequency]}</p>
+                    <p className="mt-1 md:mt-4">
+                      <span className="sr-only md:not-sr-only md:block md:text-sm md:text-muted">Starting at </span>
+                      <span className="font-display text-4xl font-semibold text-charcoal md:text-5xl">{formatCents(p.cents)}</span>
+                      <span className="ml-1.5 text-sm text-muted md:ml-0 md:mt-1 md:block">per visit</span>
+                    </p>
+                  </div>
+                  <Link href={`/quote?service=recurring&frequency=${p.frequency}`} className="btn btn-outline btn-sm shrink-0 md:mt-6 md:min-h-11 md:w-full md:text-[0.95rem]">
+                    <span className="md:hidden">Get my price</span>
+                    <span className="hidden md:inline">Price my {FREQUENCY_LABELS[p.frequency].toLowerCase()} plan</span>
                   </Link>
                 </div>
               ))}
@@ -161,7 +190,7 @@ export default async function HomePage() {
               ))}
             </ul>
             <p className="mx-auto mt-6 max-w-2xl text-center text-xs leading-relaxed text-muted">
-              Starting prices are for a home of about 2 bedrooms and 2 bathrooms in maintained condition. Larger homes, pets and extras are reflected in your estimate.
+              Starting prices are for smaller homes in maintained condition. Larger homes, pets and extras are reflected in your estimate.
             </p>
           </div>
         </section>
@@ -265,5 +294,32 @@ export default async function HomePage() {
         </div>
       </section>
     </>
+  );
+}
+
+/** Hero panel: what each service starts at, set like a menu. Prices come straight from the published pricing. */
+function PriceMenu({ items }: { items: { slug: string; name: string; cents: number | null }[] }) {
+  const priced = items.filter((i) => i.cents !== null);
+  if (priced.length === 0) return null;
+  return (
+    <div className="frame mx-auto w-full max-w-md bg-paper px-6 py-8 shadow-[var(--shadow-soft)] sm:px-9 sm:py-10 lg:max-w-none">
+      <h2 className="text-center text-3xl font-semibold">Starting prices</h2>
+      <p className="mt-1 text-center text-sm text-muted">Recurring prices are per visit</p>
+      <ul className="mt-7 space-y-4">
+        {priced.map((i) => (
+          <li key={i.slug}>
+            <Link href={`/services/${i.slug}`} className="group flex items-baseline justify-between gap-3 rounded-sm">
+              <span className="font-display text-lg font-semibold leading-snug group-hover:text-gold-ink sm:text-[1.35rem]">{i.name}</span>
+              <span aria-hidden className="hidden min-w-6 flex-1 translate-y-[-0.3rem] border-b border-dotted border-gold/60 sm:block" />
+              <span className="shrink-0 text-sm text-muted">
+                from <span className="font-display text-2xl font-semibold text-gold-dark">{formatCents(i.cents!)}</span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <Link href="/quote" className="btn btn-dark mt-8 w-full">See my exact price</Link>
+      <p className="mt-3 text-center text-xs leading-relaxed text-muted">Your estimate reflects your home&apos;s size, condition and any extras.</p>
+    </div>
   );
 }
