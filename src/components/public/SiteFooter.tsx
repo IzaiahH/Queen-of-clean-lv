@@ -17,14 +17,14 @@ export function SiteFooter({ name, tagline, phone, email, hours, logo = null, se
   return (
     <footer className="on-dark bg-obsidian text-ivory/80">
       <div className="gold-rule" />
-      <div className="mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 md:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1fr]">
-        <div>
-          <Logo variant="wordmark" height={130} name={name} imageSrc={logo} />
+      <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-6 gap-y-10 px-5 py-12 sm:gap-12 sm:px-6 sm:py-16 md:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1fr]">
+        <div className="col-span-2 md:col-span-1">
+          <Logo variant="wordmark" height={130} name={name} imageSrc={logo} className="!h-24 sm:!h-[130px]" />
           <p className="mt-5 max-w-xs font-display text-lg italic text-champagne/90">{tagline}</p>
           <p className="mt-2 text-sm text-ivory/60">Residential cleaning throughout the Las Vegas Valley.</p>
         </div>
         <div>
-          <p className="eyebrow">Services</p>
+          <p className="text-sm font-semibold text-champagne">Services</p>
           <ul className="mt-4 space-y-2.5 text-sm">
             {services.map((s) => (
               <li key={s.slug}>
@@ -34,7 +34,7 @@ export function SiteFooter({ name, tagline, phone, email, hours, logo = null, se
           </ul>
         </div>
         <div>
-          <p className="eyebrow">Company</p>
+          <p className="text-sm font-semibold text-champagne">Company</p>
           <ul className="mt-4 space-y-2.5 text-sm">
             <li><Link className="hover:text-champagne" href="/quote">Get a free quote</Link></li>
             <li><Link className="hover:text-champagne" href="/#areas">Service area</Link></li>
@@ -43,8 +43,8 @@ export function SiteFooter({ name, tagline, phone, email, hours, logo = null, se
             <li><Link className="hover:text-champagne" href="/terms">Terms of service</Link></li>
           </ul>
         </div>
-        <div>
-          <p className="eyebrow">Contact</p>
+        <div className="col-span-2 md:col-span-1">
+          <p className="text-sm font-semibold text-champagne">Contact</p>
           <ul className="mt-4 space-y-2.5 text-sm">
             {phone ? <li><a className="hover:text-champagne" href={`tel:${phone.replace(/[^\d+]/g, "")}`}>{phone}</a></li> : null}
             {email ? <li><a className="break-all hover:text-champagne" href={`mailto:${email}`}>{email}</a></li> : null}
@@ -63,7 +63,7 @@ export function SiteFooter({ name, tagline, phone, email, hours, logo = null, se
         </div>
       </div>
       <div className="border-t border-gold/15 px-4 py-6 text-center text-xs text-ivory/50">
-        © {new Date().getFullYear()} {name} · Las Vegas, Nevada
+        © {new Date().getFullYear()} {name}, Las Vegas, Nevada
       </div>
     </footer>
   );

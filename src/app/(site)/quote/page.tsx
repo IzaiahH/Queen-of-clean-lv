@@ -26,7 +26,7 @@ export default async function QuotePage({ searchParams }: { searchParams: Promis
   return (
     <div className="bg-ivory">
       <div className="border-b border-line bg-paper px-4 pb-8 pt-8 text-center sm:pb-12 sm:pt-12">
-        <p className="eyebrow">Free estimate</p>
+        <p className="kicker">Free estimate</p>
         <h1 className="mt-2 text-3xl font-semibold sm:text-5xl">Get your cleaning quote</h1>
         <p className="mx-auto mt-2 max-w-lg text-sm text-muted">About two minutes. Nothing is booked until our team confirms.</p>
       </div>

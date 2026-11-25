@@ -59,7 +59,7 @@ export default async function ServicePage({ params }: Props) {
         <nav aria-label="Breadcrumb" className="mb-6 text-center text-sm text-muted">
           <Link href="/services" className="hover:text-gold-ink">Services</Link> <span aria-hidden>/</span> <span>{service.name}</span>
         </nav>
-        <SectionHeading as="h1" eyebrow={isRecurring ? "Weekly · Every 2 weeks · Monthly" : "Las Vegas Valley"} title={service.name} intro={service.short_description} />
+        <SectionHeading as="h1" eyebrow={isRecurring ? "Weekly, every 2 weeks or monthly" : "Las Vegas Valley"} title={service.name} intro={service.short_description} />
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <Link href={quoteHref} className="btn btn-primary btn-lg">Get My Free Quote</Link>
           <Link href="/services" className="btn btn-outline btn-lg">All services</Link>
@@ -83,13 +83,13 @@ export default async function ServicePage({ params }: Props) {
                   <li key={p.frequency} className="flex items-center justify-between gap-4 py-4">
                     <span className="font-display text-2xl">{FREQUENCY_LABELS[p.frequency]}</span>
                     <span className="text-right">
-                      <span className="block text-xs uppercase tracking-[0.18em] text-muted">Starting at</span>
+                      <span className="block text-xs text-muted">Starting at</span>
                       <span className="font-display text-3xl font-semibold text-gold-dark">{formatCents(p.cents)}</span>
                     </span>
                   </li>
                 ))}
               </ul>
-              <p className="mt-4 text-xs leading-relaxed text-muted">Per visit, for a home of about 2 bedrooms and 2 bathrooms in maintained condition. Your estimate reflects your home&apos;s size, condition, pets and extras.</p>
+              <p className="mt-4 text-xs leading-relaxed text-muted">Per visit, for smaller homes in maintained condition. Your estimate reflects your home&apos;s size, condition, pets and extras.</p>
             </section>
           )}
 
@@ -98,7 +98,7 @@ export default async function ServicePage({ params }: Props) {
               <h2 id="scope" className="sr-only">What&apos;s included</h2>
               {service.includes.length > 0 && (
                 <div>
-                  <p className="eyebrow">Typically included</p>
+                  <h3 className="text-2xl font-semibold">Typically included</h3>
                   <ul className="mt-4 space-y-2.5">
                     {service.includes.map((i) => (
                       <li key={i} className="flex gap-2.5 text-sm leading-relaxed"><Check className="mt-0.5 size-4 shrink-0 text-gold-dark" aria-hidden />{i}</li>
@@ -108,7 +108,7 @@ export default async function ServicePage({ params }: Props) {
               )}
               {service.excludes.length > 0 && (
                 <div>
-                  <p className="eyebrow">Not included</p>
+                  <h3 className="text-2xl font-semibold">Not included</h3>
                   <ul className="mt-4 space-y-2.5 text-muted">
                     {service.excludes.map((i) => (
                       <li key={i} className="flex gap-2.5 text-sm leading-relaxed"><X className="mt-0.5 size-4 shrink-0" aria-hidden />{i}</li>
@@ -123,7 +123,7 @@ export default async function ServicePage({ params }: Props) {
 
         <aside className="space-y-5 lg:sticky lg:top-32 lg:self-start">
           <div className="frame bg-paper p-7 text-center">
-            <p className="eyebrow">Your estimate</p>
+            <p className="kicker">Your estimate</p>
             {prices.length > 0 ? (
               <>
                 <p className="mt-3 text-sm text-muted">Starting at</p>
@@ -137,7 +137,7 @@ export default async function ServicePage({ params }: Props) {
           </div>
           {extras.length > 0 && (
             <div className="card p-6">
-              <p className="eyebrow">Optional extras</p>
+              <h2 className="text-2xl font-semibold">Optional extras</h2>
               <ul className="mt-4 space-y-2 text-sm">
                 {extras.map((a) => {
                   const r = pricing.rules.addons[a.slug];

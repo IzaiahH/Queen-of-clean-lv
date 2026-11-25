@@ -33,8 +33,8 @@ export default async function ServicesPage() {
                   <p className="mt-3 text-sm font-semibold text-gold-ink">{from !== null ? `Starting at ${formatCents(from)}` : "Custom quote"}</p>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-3">
-                  <Link href={`/services/${s.slug}`} className="btn btn-outline btn-sm">Details <ArrowRight className="size-4" aria-hidden /></Link>
-                  <Link href={`/quote?service=${s.slug}`} className="btn btn-primary btn-sm">Get a quote</Link>
+                  <Link href={`/quote?service=${s.slug}`} className="btn btn-dark btn-sm">Get a quote</Link>
+                  <Link href={`/services/${s.slug}`} className="btn btn-ghost btn-sm">Details <ArrowRight className="size-4" aria-hidden /></Link>
                 </div>
               </div>
             </article>
